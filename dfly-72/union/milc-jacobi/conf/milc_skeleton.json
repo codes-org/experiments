@@ -1,0 +1,17 @@
+{
+"jobs" : {
+        "dll_path": "${FABSIM_APPS_PATH}/dll/milc.so",
+        "size": ${MILC_NODES},
+        "cfg": {
+            "app": "milc",
+            "iteration_cnt": ${MILC_ITERS},
+            "compute_delay": 100,
+            "dimension_cnt": 4,
+            "dimension_sizes": [${MILC_LAYOUT}],
+            "msg_size": ${MILC_MSG_SIZE},
+            "max_dimension_distance": 1,
+            "randomize_communication_order": false,
+	    "cpu_freq" : 4e9
+       }
+    }
+}

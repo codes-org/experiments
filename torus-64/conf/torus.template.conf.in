@@ -1,0 +1,33 @@
+LPGROUPS
+{
+   MODELNET_GRP
+   {
+      # This indicates the number of nodes in the torus network (has to coincide with n_dims and dim_length)
+      repetitions="64";
+      # Both of these should be 1 for torus network
+      nw-lp="1";
+      modelnet_torus="1";
+   }
+}
+PARAMS
+{
+   modelnet_order=( "torus" );
+# packet size in the network
+   packet_size="${PACKET_SIZE}";
+# chunk size in the network (when chunk size = packet size, packets will not be
+# divided into chunks)
+   chunk_size="${CHUNK_SIZE}";
+# scheduler options
+   modelnet_scheduler="fcfs";
+   # modelnet_scheduler="round-robin";
+# ROSS message size
+   message_size="624";
+   n_dims="3";
+   dim_length="8,4,2";
+# bandwidth in GiB/s for compute router-router channels
+   link_bandwidth="2.0";
+# bandwidth in GiB/s for compute node-router channels
+   cn_bandwidth="2.0";
+   buffer_size="4096";
+   num_vc="1";
+}

@@ -1,6 +1,5 @@
 {
 "jobs" : {
-        "dll_path": "...",
         "size": ${MILC_NODES},
         "cfg": {
             "app": "milc",
@@ -11,7 +10,7 @@
             "msg_size": ${MILC_MSG_SIZE},
             "max_dimension_distance": 1,
             "randomize_communication_order": false,
-	    "cpu_freq" : 4e9
+	        "cpu_freq" : ${CPU_FREQ}
        }
     }
 }

@@ -44,5 +44,9 @@ export PATH_TO_SWM_INSTALL
 
 # We pass all parameters to the script
 pushd "$expfolder"
-bash -x "$EXPERIMENT_SCRIPT" "$@"
+if [[ "$EXPERIMENT_SCRIPT" == *.py ]]; then
+  python3 "$EXPERIMENT_SCRIPT" "$@"
+else
+  bash -x "$EXPERIMENT_SCRIPT" "$@"
+fi
 popd

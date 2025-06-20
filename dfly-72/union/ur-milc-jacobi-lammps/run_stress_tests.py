@@ -33,44 +33,10 @@ class StressTestRunner:
         signal.signal(signal.SIGINT, self._signal_handler)
 
         # Validate required environment variables
-        required_vars = ['PATH_TO_CODES_BUILD', 'PATH_TO_SWM_INSTALL', 'PATH_TO_UNION_INSTALL', 'SCRIPTS_ROOT_DIR']
+        required_vars = ['PATH_TO_CODES_BUILD', 'SCRIPTS_ROOT_DIR']
         for var in required_vars:
             if not os.environ.get(var):
                 raise RuntimeError(f"Required environment variable {var} not set")
-
-    def backup_configs(self):
-        """Backup original config files"""
-        self.tmpdir = tempfile.mkdtemp(dir=str(self.exp_folder))
-
-        swm_milc = Path(os.environ['PATH_TO_SWM_INSTALL']) / 'share/milc_skeleton.json'
-        swm_lammps = Path(os.environ['PATH_TO_SWM_INSTALL']) / 'share/lammps_workload.json'
-        union_conceptual = Path(os.environ['PATH_TO_UNION_INSTALL']) / 'share/conceptual.json'
-
-        if swm_milc.exists():
-            shutil.move(str(swm_milc), f"{self.tmpdir}/milc_skeleton.json")
-        if swm_lammps.exists():
-            shutil.move(str(swm_lammps), f"{self.tmpdir}/lammps_workload.json")
-        if union_conceptual.exists():
-            shutil.move(str(union_conceptual), f"{self.tmpdir}/conceptual.json")
-
-    def restore_configs(self):
-        """Restore original config files"""
-        if not self.tmpdir:
-            return
-
-        swm_share = Path(os.environ['PATH_TO_SWM_INSTALL']) / 'share'
-        union_share = Path(os.environ['PATH_TO_UNION_INSTALL']) / 'share'
-
-        for filename in ['milc_skeleton.json', 'lammps_workload.json']:
-            src = f"{self.tmpdir}/{filename}"
-            if os.path.exists(src):
-                shutil.move(src, str(swm_share / filename))
-
-        conceptual_src = f"{self.tmpdir}/conceptual.json"
-        if os.path.exists(conceptual_src):
-            shutil.move(conceptual_src, str(union_share / 'conceptual.json'))
-
-        os.rmdir(self.tmpdir)
 
     def _signal_handler(self, signum, frame):
         """Handle Ctrl+C gracefully"""
@@ -200,6 +166,10 @@ class StressTestRunner:
         jacobi_compute_delay = int(exp_params['jacobi_compute_delay'] * 1e3)
         milc_compute_delay = int(exp_params['milc_compute_delay'] * compute_cycles_per_ms)
 
+        # Create experiment config directory
+        exp_config_dir = self.exp_folder / exp_name
+        exp_config_dir.mkdir(exist_ok=True)
+
         # Set all environment variables
         env_vars = {
             'CPU_FREQ': str(exp_params['cpu_freq']),
@@ -228,7 +198,8 @@ class StressTestRunner:
             'UR_NODES': str(exp_params['ur_nodes']),
             'UR_PERIOD': str(exp_params['ur_period']),
 
-            'CURRENT_EXP_NAME': exp_name
+            'CURRENT_EXP_NAME': exp_name,
+            'CURRENT_EXP_DIR': str(exp_config_dir),
         }
 
         # Add allocations
@@ -237,22 +208,20 @@ class StressTestRunner:
         # Set environment variables
         os.environ.update(env_vars)
 
-        # Create experiment config directory
-        exp_config_dir = self.exp_folder / exp_name
-        exp_config_dir.mkdir(exist_ok=True)
-
         # Generate configuration files using envsubst
         config_files = [
-            ('workloads-settings.conf', 'workloads-settings.conf'),
-            ('workloads-allocation.conf', 'workloads-allocation.conf'),
-            ('milc_skeleton.json', 'milc_skeleton.json'),
-            ('lammps_workload.json', 'lammps_workload.json'),
-            ('conceptual.json', 'conceptual.json'),
+            'workloads-settings.conf',
+            'workloads-allocation.conf',
+            'milc_skeleton.json',
+            'lammps_workload.json',
+            'conceptual.json',
+            'workloads-json.conf',
+            'args-file.conf',
         ]
 
-        for src_file, dst_file in config_files:
+        for src_file in config_files:
             src_path = Path(self.configs_path) / src_file
-            dst_path = exp_config_dir / dst_file
+            dst_path = exp_config_dir / src_file
 
             if src_path.exists():
                 # Use envsubst to substitute environment variables
@@ -270,14 +239,6 @@ class StressTestRunner:
                     # Fall back to envsubst
                     _ = subprocess.run(['envsubst'], input=template_content, text=True,
                                  stdout=open(dst_path, 'w'), check=True)
-
-        # Copy configs to install locations
-        swm_share = Path(os.environ['PATH_TO_SWM_INSTALL']) / 'share'
-        union_share = Path(os.environ['PATH_TO_UNION_INSTALL']) / 'share'
-
-        shutil.copy(exp_config_dir / 'milc_skeleton.json', swm_share / 'milc_skeleton.json')
-        shutil.copy(exp_config_dir / 'lammps_workload.json', swm_share / 'lammps_workload.json')
-        shutil.copy(exp_config_dir / 'conceptual.json', union_share / 'conceptual.json')
 
         return exp_config_dir
 
@@ -297,23 +258,6 @@ class StressTestRunner:
 
         return conf_path
 
-    def _generate_mode_args_file(self, exp_config_dir: Path, mode_name: str) -> Path:
-        """Generate mode-specific args file"""
-        src_path = Path(self.configs_path) / 'args-file.conf'
-        args_path = exp_config_dir / f'args-file-{mode_name}.conf'
-
-        with open(src_path, 'r') as f:
-            template_content = f.read()
-
-        # Substitute mode-specific variables
-        template_content = template_content.replace('{CURRENT_EXP_DIR}', str(exp_config_dir))
-        template_content = template_content.replace('{MODE_NAME}', mode_name)
-
-        with open(args_path, 'w') as f:
-            _ = f.write(template_content)
-
-        return args_path
-
     def run_simulation_mode(
             self,
             exp_config_dir: Path,
@@ -328,9 +272,9 @@ class StressTestRunner:
         os.environ.update(mode_settings)
 
         conf_path = self._generate_mode_network_config(exp_config_dir, mode_name)
-        args_path = self._generate_mode_args_file(exp_config_dir, mode_name)
         executable_path = os.environ['PATH_TO_CODES_BUILD'] + '/src/model-net-mpi-replay'
-        params = [executable_path, f'--args-file={args_path}'] + extraparams + ['--', str(conf_path)]
+        args_file = exp_config_dir / f'args-file.conf'
+        params = [executable_path, f'--args-file={str(args_file)}'] + extraparams + ['--', str(conf_path)]
         output_dir = f"{os.environ['CURRENT_EXP_NAME']}/{mode_name}"
 
         success = self.mpirun_do(output_dir, params)
@@ -510,40 +454,34 @@ class StressTestRunner:
         ]
 
         # Backup configs and setup common configuration
-        self.backup_configs()
         self.setup_common_config()
 
-        try:
-            # Run all stress tests
-            for params in stress_tests:
-                # Check if we've been interrupted
-                if self.interrupted:
-                    print("Stress test suite interrupted by user")
-                    break
+        # Run all stress tests
+        for params in stress_tests:
+            # Check if we've been interrupted
+            if self.interrupted:
+                print("Stress test suite interrupted by user")
+                break
 
-                test_params = common_config | params
-                extraparams: list[str] = test_params['extraparams']
-                self.run_experiment_with_modes(test_params, extraparams)
+            test_params = common_config | params
+            extraparams: list[str] = test_params['extraparams']
+            self.run_experiment_with_modes(test_params, extraparams)
 
-            print("============================================")
-            print("STRESS TEST SUITE COMPLETED")
-            print("============================================")
+        print("============================================")
+        print("STRESS TEST SUITE COMPLETED")
+        print("============================================")
 
-            if self.failed_experiments:
-                print(f"FAILED EXPERIMENTS/MODES ({len(self.failed_experiments)}):")
-                for failed in self.failed_experiments:
-                    print(f"  - {failed}")
-                print()
-                print("NOTE: Some experiments/modes failed, but the script continued")
-                print("to run all remaining tests as requested.")
-            else:
-                print("All stress tests completed successfully!")
+        if self.failed_experiments:
+            print(f"FAILED EXPERIMENTS/MODES ({len(self.failed_experiments)}):")
+            for failed in self.failed_experiments:
+                print(f"  - {failed}")
+            print()
+            print("NOTE: Some experiments/modes failed, but the script continued")
+            print("to run all remaining tests as requested.")
+        else:
+            print("All stress tests completed successfully!")
 
-            print("============================================")
-
-        finally:
-            # Always restore configs
-            self.restore_configs()
+        print("============================================")
 
 def main():
     try:

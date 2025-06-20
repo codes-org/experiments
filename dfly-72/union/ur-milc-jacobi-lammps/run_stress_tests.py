@@ -169,10 +169,11 @@ class StressTestRunner:
             'NETWORK_SURR_ON': '1',
             'NETWORK_MODE': 'nothing',
             'APP_SURR_ON': '1',
-            'APP_DIRECTOR_MODE': 'every-n-nanoseconds',
+            #'APP_DIRECTOR_MODE': 'every-n-nanoseconds',
+            'APP_DIRECTOR_MODE': 'every-n-gvt',
             'EVERY_N_GVTS': '1500',
             'EVERY_NSECS': '1.0e6',
-            'ITERS_TO_COLLECT': '5'
+            'ITERS_TO_COLLECT': '2'
         })
 
     def generate_base_config(self, exp_params: dict[str, Any]):
@@ -242,11 +243,11 @@ class StressTestRunner:
 
         # Generate configuration files using envsubst
         config_files = [
-            ('workload.conf', 'workload.conf'),
-            ('allocation.conf', 'allocation.conf'),
+            ('workloads-settings.conf', 'workloads-settings.conf'),
+            ('workloads-allocation.conf', 'workloads-allocation.conf'),
             ('milc_skeleton.json', 'milc_skeleton.json'),
             ('lammps_workload.json', 'lammps_workload.json'),
-            ('conceptual.json', 'conceptual.json')
+            ('conceptual.json', 'conceptual.json'),
         ]
 
         for src_file, dst_file in config_files:
@@ -296,21 +297,22 @@ class StressTestRunner:
 
         return conf_path
 
-    def _build_simulation_params(self, exp_config_dir: Path, extraparams: list[str], conf_path: Path) -> list[str]:
-        """Build the parameters list for the simulation"""
-        params = [
-            os.environ['PATH_TO_CODES_BUILD'] + '/src/model-net-mpi-replay',
-            '--synch=3',
-            '--batch=4', '--gvt-interval=256',
-            '--cons-lookahead=200',
-            '--max-opt-lookahead=200',
-            '--workload_type=conc-online',
-            '--lp-io-dir=lp-io-dir',
-            #'--enable_mpi_debug=1',
-            f'--workload_conf_file={exp_config_dir}/workload.conf',
-            f'--alloc_file={exp_config_dir}/allocation.conf',
-        ]
-        return params + extraparams + ['--', str(conf_path)]
+    def _generate_mode_args_file(self, exp_config_dir: Path, mode_name: str) -> Path:
+        """Generate mode-specific args file"""
+        src_path = Path(self.configs_path) / 'args-file.conf'
+        args_path = exp_config_dir / f'args-file-{mode_name}.conf'
+
+        with open(src_path, 'r') as f:
+            template_content = f.read()
+
+        # Substitute mode-specific variables
+        template_content = template_content.replace('{CURRENT_EXP_DIR}', str(exp_config_dir))
+        template_content = template_content.replace('{MODE_NAME}', mode_name)
+
+        with open(args_path, 'w') as f:
+            _ = f.write(template_content)
+
+        return args_path
 
     def run_simulation_mode(
             self,
@@ -326,7 +328,9 @@ class StressTestRunner:
         os.environ.update(mode_settings)
 
         conf_path = self._generate_mode_network_config(exp_config_dir, mode_name)
-        params = self._build_simulation_params(exp_config_dir, extraparams, conf_path)
+        args_path = self._generate_mode_args_file(exp_config_dir, mode_name)
+        executable_path = os.environ['PATH_TO_CODES_BUILD'] + '/src/model-net-mpi-replay'
+        params = [executable_path, f'--args-file={args_path}'] + extraparams + ['--', str(conf_path)]
         output_dir = f"{os.environ['CURRENT_EXP_NAME']}/{mode_name}"
 
         success = self.mpirun_do(output_dir, params)
@@ -448,16 +452,16 @@ class StressTestRunner:
             #    'NETWORK_SURR_ON': '0',
             #    'APP_SURR_ON': '1'
             #},
-            'app-and-network': {
-                'NETWORK_SURR_ON': '1',
-                'APP_SURR_ON': '1',
-                'NETWORK_MODE': 'nothing'
-            },
-            #'app-and-network-freezing': {
+            #'app-and-network': {
             #    'NETWORK_SURR_ON': '1',
             #    'APP_SURR_ON': '1',
-            #    'NETWORK_MODE': 'freeze'
+            #    'NETWORK_MODE': 'nothing'
             #},
+            'app-and-network-freezing': {
+                'NETWORK_SURR_ON': '1',
+                'APP_SURR_ON': '1',
+                'NETWORK_MODE': 'freeze'
+            },
         }
 
         failed_modes = []
@@ -499,59 +503,10 @@ class StressTestRunner:
                 'exp_name': '1-bandwidth-saturation',
                 'jacobi_nodes': 20, 'jacobi_layout': '4,5,1', 'jacobi_msg': 80*1024, 'jacobi_iters': 150, 'jacobi_compute_delay': 200,
                 'milc_nodes': 22, 'milc_iters': 100, 'milc_msg': 400*1024, 'milc_layout': '2,11,1,1', 'milc_compute_delay': 50,
-                'lammps_nodes': 22, 'lammps_x_replicas': 2, 'lammps_y_replicas': 11, 'lammps_z_replicas': 1, 'lammps_time_steps': 8000,
+                'lammps_nodes': 22, 'lammps_x_replicas': 2, 'lammps_y_replicas': 11, 'lammps_z_replicas': 1, 'lammps_time_steps': 5,
                 'ur_nodes': 8, 'ur_period': 726.609003,
                 'extraparams': ['--extramem=1000000'],
             },
-            {
-                'exp_name': '2-micro-vs-macro-timing',
-                'jacobi_nodes': 24, 'jacobi_layout': '6,2,2', 'jacobi_msg': 200*1024, 'jacobi_iters': 15, 'jacobi_compute_delay': 10,
-                'milc_nodes': 24, 'milc_iters': 800, 'milc_msg': 150*1024, 'milc_layout': '3,2,2,2', 'milc_compute_delay': 500,
-                'lammps_nodes': 18, 'lammps_x_replicas': 3, 'lammps_y_replicas': 3, 'lammps_z_replicas': 2, 'lammps_time_steps': 40000,
-                'ur_nodes': 6, 'ur_period': 1200,
-            },
-            {
-                'exp_name': '3-cascade-failure-pattern',
-                'jacobi_nodes': 16, 'jacobi_layout': '4,2,2', 'jacobi_msg': 60*1024, 'jacobi_iters': 50, 'jacobi_compute_delay': 50,
-                'milc_nodes': 20, 'milc_iters': 200, 'milc_msg': 300*1024, 'milc_layout': '4,5,1,1', 'milc_compute_delay': 50,
-                'lammps_nodes': 32, 'lammps_x_replicas': 4, 'lammps_y_replicas': 4, 'lammps_z_replicas': 2, 'lammps_time_steps': 25000,
-                'ur_nodes': 4, 'ur_period': 1000,
-            },
-            {
-                'exp_name': '4-resource-starvation',
-                'jacobi_nodes': 4, 'jacobi_layout': '2,2,1', 'jacobi_msg': 120*1024, 'jacobi_iters': 300, 'jacobi_compute_delay': 800,
-                'milc_nodes': 52, 'milc_iters': 120, 'milc_msg': 600*1024, 'milc_layout': '13,2,2,1', 'milc_compute_delay': 100,
-                'lammps_nodes': 4, 'lammps_x_replicas': 2, 'lammps_y_replicas': 2, 'lammps_z_replicas': 1, 'lammps_time_steps': 15000,
-                'ur_nodes': 12, 'ur_period': 900,
-            },
-            {
-                'exp_name': '5-bursty-communication-chaos',
-                'jacobi_nodes': 28, 'jacobi_layout': '7,2,2', 'jacobi_msg': 20*1024, 'jacobi_iters': 400, 'jacobi_compute_delay': 5,
-                'milc_nodes': 20, 'milc_iters': 80, 'milc_msg': 1024*1024, 'milc_layout': '4,5,1,1', 'milc_compute_delay': 100,
-                'lammps_nodes': 16, 'lammps_x_replicas': 4, 'lammps_y_replicas': 2, 'lammps_z_replicas': 2, 'lammps_time_steps': 12000,
-                'ur_nodes': 8, 'ur_period': 800,
-            },
-            {
-                'exp_name': '6-geometric-routing-stress',
-                'jacobi_nodes': 24, 'jacobi_layout': '12,2,1', 'jacobi_msg': 100*1024, 'jacobi_iters': 200, 'jacobi_compute_delay': 300,
-                'milc_nodes': 24, 'milc_iters': 150, 'milc_msg': 350*1024, 'milc_layout': '2,2,2,3', 'milc_compute_delay': 150,
-                'lammps_nodes': 18, 'lammps_x_replicas': 9, 'lammps_y_replicas': 2, 'lammps_z_replicas': 1, 'lammps_time_steps': 10000,
-                'ur_nodes': 6, 'ur_period': 1100,
-            },
-            {
-                'exp_name': '7-endurance-marathon',
-                'jacobi_nodes': 20, 'jacobi_layout': '5,2,2', 'jacobi_msg': 60*1024, 'jacobi_iters': 2000, 'jacobi_compute_delay': 400,
-                'milc_nodes': 24, 'milc_iters': 500, 'milc_msg': 400*1024, 'milc_layout': '3,2,2,2', 'milc_compute_delay': 300,
-                'lammps_nodes': 20, 'lammps_x_replicas': 4, 'lammps_y_replicas': 5, 'lammps_z_replicas': 1, 'lammps_time_steps': 60000,
-                'ur_nodes': 8, 'ur_period': 1000,
-            },
-            {
-                'exp_name': '8-application-interference',
-                'jacobi_nodes': 21, 'jacobi_layout': '7,3,1', 'jacobi_msg': 80*1024, 'jacobi_iters': 600, 'jacobi_compute_delay': 100,
-                'milc_nodes': 21, 'milc_iters': 300, 'milc_msg': 500*1024, 'milc_layout': '7,3,1,1', 'milc_compute_delay': 100,
-                'lammps_nodes': 20, 'lammps_x_replicas': 4, 'lammps_y_replicas': 5, 'lammps_z_replicas': 1, 'lammps_time_steps': 18000,
-                'ur_nodes': 10, 'ur_period': 850,
-            }
         ]
 
         # Backup configs and setup common configuration

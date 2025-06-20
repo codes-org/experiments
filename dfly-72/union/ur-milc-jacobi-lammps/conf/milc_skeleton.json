@@ -5,7 +5,7 @@
             "app": "milc",
             "iteration_cnt": ${MILC_ITERS},
             "compute_delay": ${MILC_COMPUTE_DELAY},
-            "dimension_cnt": 4,
+            "dimension_cnt": ${DIMENSION_CNT},
             "dimension_sizes": [${MILC_LAYOUT}],
             "msg_size": ${MILC_MSG_SIZE},
             "max_dimension_distance": 1,

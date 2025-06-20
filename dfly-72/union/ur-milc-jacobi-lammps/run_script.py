@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Stress Testing Script for 4-Application CODES Simulations
+Testing Script for 4-Application CODES Simulations
 Applications: Jacobi, MILC, LAMMPS, UR (Uniform Random traffic)
 
 Claude wrote most of this. I'm very grateful for it :)
@@ -15,8 +15,9 @@ from pathlib import Path
 from string import Template
 from typing import Any
 
-class StressTestRunner:
-    def __init__(self):
+class TestRunner:
+    def __init__(self, modes):
+        self.modes = modes
         self.script_dir: Path = Path(__file__).parent
         self.configs_path: str = os.environ.get('PATH_TO_SCRIPT_DIR', str(self.script_dir)) + '/conf'
         self.exp_folder: Path = Path.cwd()
@@ -119,20 +120,6 @@ class StressTestRunner:
             'UR_ALLOCATION': ' '.join(map(str, ur_alloc))
         }
 
-    def setup_common_config(self):
-        """Set up common CODES configuration"""
-        os.environ.update({
-            'PATH_TO_CONNECTIONS': self.configs_path,
-            'NETWORK_SURR_ON': '1',
-            'NETWORK_MODE': 'nothing',
-            'APP_SURR_ON': '1',
-            #'APP_DIRECTOR_MODE': 'every-n-nanoseconds',
-            'APP_DIRECTOR_MODE': 'every-n-gvt',
-            'EVERY_N_GVTS': '1500',
-            'EVERY_NSECS': '1.0e6',
-            'ITERS_TO_COLLECT': '2'
-        })
-
     def generate_base_config(self, exp_params: dict[str, Any]):
         """Generate base configuration for an experiment"""
         exp_name = exp_params['exp_name']
@@ -144,8 +131,7 @@ class StressTestRunner:
         print(f"  UR: {exp_params['ur_nodes']} nodes, {exp_params['ur_period']}ns period")
 
         # Parse jacobi_layout for grid dimensions
-        layout = exp_params['jacobi_layout'].split(',')
-        proc_x, proc_y, proc_z = map(int, layout)
+        proc_x, proc_y, proc_z = exp_params['jacobi_layout']
 
         # Generate node allocations
         allocations = self.generate_non_overlapping_allocations(
@@ -178,7 +164,8 @@ class StressTestRunner:
             'MILC_MSG_SIZE': str(exp_params['milc_msg']),
             'MILC_COMPUTE_DELAY': str(int(milc_compute_delay)),
             'MILC_NODES': str(exp_params['milc_nodes']),
-            'MILC_LAYOUT': exp_params['milc_layout'],
+            'MILC_LAYOUT': ','.join(str(v) for v in exp_params['milc_layout']),
+            'DIMENSION_CNT': str(len(exp_params['milc_layout'])),
 
             'LAMMPS_NODES': str(exp_params['lammps_nodes']),
             'LAMMPS_X_REPLICAS': str(exp_params['lammps_x_replicas']),
@@ -370,6 +357,19 @@ class StressTestRunner:
 
         return success
 
+    def setup_default_config(self):
+        os.environ.update({
+            'PATH_TO_CONNECTIONS': self.configs_path,
+            'NETWORK_SURR_ON': '1',
+            'NETWORK_MODE': 'nothing',
+            'APP_SURR_ON': '1',
+            #'APP_DIRECTOR_MODE': 'every-n-nanoseconds',
+            'APP_DIRECTOR_MODE': 'every-n-gvt',
+            'EVERY_N_GVTS': '1500',
+            'EVERY_NSECS': '1.0e6',
+            'ITERS_TO_COLLECT': '5'
+        })
+
     def run_experiment_with_modes(self, exp_params: dict[str, Any], extraparams: list[str]):
         """Run an experiment with all simulation modes"""
         exp_config_dir = self.generate_base_config(exp_params)
@@ -377,32 +377,10 @@ class StressTestRunner:
 
         print(f"Running all simulation modes for: {exp_name}")
 
-        # Define simulation modes
-        modes = {
-            #'high-fidelity': {
-            #    'NETWORK_SURR_ON': '0',
-            #    'APP_SURR_ON': '0'
-            #},
-            #'app-surrogate': {
-            #    'NETWORK_SURR_ON': '0',
-            #    'APP_SURR_ON': '1'
-            #},
-            #'app-and-network': {
-            #    'NETWORK_SURR_ON': '1',
-            #    'APP_SURR_ON': '1',
-            #    'NETWORK_MODE': 'nothing'
-            #},
-            'app-and-network-freezing': {
-                'NETWORK_SURR_ON': '1',
-                'APP_SURR_ON': '1',
-                'NETWORK_MODE': 'freeze'
-            },
-        }
-
         failed_modes = []
         successful_modes = []
 
-        for mode_name, mode_settings in modes.items():
+        for mode_name, mode_settings in self.modes.items():
             # Check if we've been interrupted
             if self.interrupted:
                 print("Experiment interrupted by user")
@@ -422,44 +400,18 @@ class StressTestRunner:
             print(f"  Failed modes: {', '.join(failed_modes)}")
         print("----------------------------------------")
 
-    def run_stress_tests(self):
-        """Run all 8 stress test experiments"""
-        print("Starting 4-Application Stress Testing Suite")
+    def run_tests(self, common_config, tests):
+        print("Starting Testing Suite")
         print("============================================")
 
-        common_config = {
-            'cpu_freq': 4e9, # in Hz
-            'extraparams': ['--extramem=100000'],
-        }
-
-        # Define 8 stress test experiments from README.md
-        stress_tests = [
-            {
-                'exp_name': '1-bandwidth-saturation',
-                'jacobi_nodes': 24, 'jacobi_layout': '4,2,3', 'jacobi_msg': 80*1024, 'jacobi_iters': 150, 'jacobi_compute_delay': 200,
-                'milc_nodes': 48, 'milc_iters': 100, 'milc_msg': 400*1024, 'milc_layout': '2,8,3,1', 'milc_compute_delay': 50,
-                'lammps_nodes': 0, 'lammps_x_replicas': 2, 'lammps_y_replicas': 11, 'lammps_z_replicas': 1, 'lammps_time_steps': 5,
-                'ur_nodes': 0, 'ur_period': 726.609003,
-                'extraparams': ['--extramem=1000000'],
-            },
-            #{
-            #    'exp_name': '1-bandwidth-saturation',
-            #    'jacobi_nodes': 20, 'jacobi_layout': '4,5,1', 'jacobi_msg': 80*1024, 'jacobi_iters': 150, 'jacobi_compute_delay': 200,
-            #    'milc_nodes': 22, 'milc_iters': 100, 'milc_msg': 400*1024, 'milc_layout': '2,11,1,1', 'milc_compute_delay': 50,
-            #    'lammps_nodes': 22, 'lammps_x_replicas': 2, 'lammps_y_replicas': 11, 'lammps_z_replicas': 1, 'lammps_time_steps': 5,
-            #    'ur_nodes': 8, 'ur_period': 726.609003,
-            #    'extraparams': ['--extramem=1000000'],
-            #},
-        ]
-
         # Backup configs and setup common configuration
-        self.setup_common_config()
+        self.setup_default_config()
 
-        # Run all stress tests
-        for params in stress_tests:
+        # Run all tests
+        for params in tests:
             # Check if we've been interrupted
             if self.interrupted:
-                print("Stress test suite interrupted by user")
+                print("Test suite interrupted by user")
                 break
 
             test_params = common_config | params
@@ -467,7 +419,7 @@ class StressTestRunner:
             self.run_experiment_with_modes(test_params, extraparams)
 
         print("============================================")
-        print("STRESS TEST SUITE COMPLETED")
+        print("TEST SUITE COMPLETED")
         print("============================================")
 
         if self.failed_experiments:
@@ -478,14 +430,70 @@ class StressTestRunner:
             print("NOTE: Some experiments/modes failed, but the script continued")
             print("to run all remaining tests as requested.")
         else:
-            print("All stress tests completed successfully!")
+            print("All tests completed successfully!")
 
         print("============================================")
 
-def main():
+
+if __name__ == "__main__":
+    # Define simulation modes
+    modes = {
+        'high-fidelity': {
+            'NETWORK_SURR_ON': '0',
+            'APP_SURR_ON': '0'
+        },
+        #'app-surrogate': {
+        #    'NETWORK_SURR_ON': '0',
+        #    'APP_SURR_ON': '1'
+        #},
+        #'app-and-network': {
+        #    'NETWORK_SURR_ON': '1',
+        #    'APP_SURR_ON': '1',
+        #    'NETWORK_MODE': 'nothing'
+        #},
+        'app-and-network-freezing': {
+            'NETWORK_SURR_ON': '1',
+            'APP_SURR_ON': '1',
+            'NETWORK_MODE': 'freeze'
+        },
+    }
+
+    common_config = {
+        'cpu_freq': 4e9, # in Hz
+        'extraparams': ['--extramem=100000'],
+    }
+
+    # Define test experiments from README.md
+    tests = [
+        {
+            'exp_name': 'milc36-jacobi36',
+            'jacobi_nodes': 36, 'jacobi_iters': 39, 'jacobi_layout': [4,3,3], 'jacobi_msg': 50_000, 'jacobi_compute_delay': 200,
+            'milc_nodes': 36, 'milc_iters': 120, 'milc_layout': [2,2,3,3], 'milc_msg': 497664, 'milc_compute_delay': 0.025,
+            'lammps_nodes': 0, 'lammps_x_replicas': 2, 'lammps_y_replicas': 11, 'lammps_z_replicas': 1, 'lammps_time_steps': 5,
+            'ur_nodes': 0, 'ur_period': 726.609003,
+            'extraparams': ['--extramem=1000000'],
+        },
+        #{
+        #    'exp_name': 'milc48-jacobi24',
+        #    'jacobi_nodes': 24, 'jacobi_layout': [4,2,3], 'jacobi_msg': 80*1024, 'jacobi_iters': 150, 'jacobi_compute_delay': 200,
+        #    'milc_nodes': 48, 'milc_iters': 100, 'milc_msg': 400*1024, 'milc_layout': [2,8,3,1], 'milc_compute_delay': 50,
+        #    'lammps_nodes': 0, 'lammps_x_replicas': 2, 'lammps_y_replicas': 11, 'lammps_z_replicas': 1, 'lammps_time_steps': 5,
+        #    'ur_nodes': 0, 'ur_period': 726.609003,
+        #    'extraparams': ['--extramem=1000000'],
+        #},
+        #{
+        #    'exp_name': '1-bandwidth-saturation',
+        #    'jacobi_nodes': 20, 'jacobi_layout': [4,5,1], 'jacobi_msg': 80*1024, 'jacobi_iters': 150, 'jacobi_compute_delay': 200,
+        #    'milc_nodes': 22, 'milc_iters': 100, 'milc_msg': 400*1024, 'milc_layout': [2,11,1,1], 'milc_compute_delay': 50,
+        #    'lammps_nodes': 22, 'lammps_x_replicas': 2, 'lammps_y_replicas': 11, 'lammps_z_replicas': 1, 'lammps_time_steps': 5,
+        #    'ur_nodes': 8, 'ur_period': 726.609003,
+        #    'extraparams': ['--extramem=1000000'],
+        #},
+    ]
+
     try:
-        runner = StressTestRunner()
-        runner.run_stress_tests()
+        runner = TestRunner(modes)
+        runner.run_tests(common_config, tests)
     except KeyboardInterrupt:
         # This should be handled by the signal handler, but just in case
         print("\nScript interrupted by user", file=sys.stderr)
@@ -493,6 +501,3 @@ def main():
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
-
-if __name__ == "__main__":
-    main()

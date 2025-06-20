@@ -6,6 +6,7 @@ Applications: Jacobi, MILC, LAMMPS, UR (Uniform Random traffic)
 Claude wrote most of this. I'm very grateful for it :)
 """
 
+import math
 import os
 import sys
 import subprocess
@@ -130,10 +131,23 @@ class TestRunner:
         print(f"  LAMMPS: {exp_params['lammps_nodes']} nodes, {exp_params['lammps_time_steps']} time steps")
         print(f"  UR: {exp_params['ur_nodes']} nodes, {exp_params['ur_period']}ns period")
 
-        # Parse jacobi_layout for grid dimensions
         proc_x, proc_y, proc_z = exp_params['jacobi_layout']
+        lammps_x_replicas, lammps_y_replicas, lammps_z_replicas = exp_params['lammps_replicas']
 
-        # Generate node allocations
+        jacobi_nodes = exp_params['jacobi_nodes']
+        lammps_nodes = exp_params['lammps_nodes']
+        milc_nodes = exp_params['milc_nodes']
+        jacobi_prod = proc_x * proc_y * proc_z
+        lammps_prod = lammps_x_replicas * lammps_y_replicas * lammps_z_replicas
+        milc_prod = math.prod(exp_params['milc_layout'])
+
+        if jacobi_nodes > 0:
+            assert jacobi_nodes == jacobi_prod, f"jacobi nodes have to coincide with layout: nodes={jacobi_nodes} != prod(layout)={jacobi_prod}"
+        if lammps_nodes > 0:
+            assert lammps_nodes == lammps_prod, f"lammbs nodes have to coincide with replicas: nodes={lammps_nodes} != prod(layout)={lammps_prod}"
+        if milc_nodes > 0:
+            assert milc_nodes == milc_prod, f"milc nodes have to coincide with layout: nodes={milc_nodes} != prod(layout)={milc_prod}"
+
         allocations = self.generate_non_overlapping_allocations(
             exp_params['jacobi_nodes'], exp_params['milc_nodes'],
             exp_params['lammps_nodes'], exp_params['ur_nodes']
@@ -168,9 +182,9 @@ class TestRunner:
             'DIMENSION_CNT': str(len(exp_params['milc_layout'])),
 
             'LAMMPS_NODES': str(exp_params['lammps_nodes']),
-            'LAMMPS_X_REPLICAS': str(exp_params['lammps_x_replicas']),
-            'LAMMPS_Y_REPLICAS': str(exp_params['lammps_y_replicas']),
-            'LAMMPS_Z_REPLICAS': str(exp_params['lammps_z_replicas']),
+            'LAMMPS_X_REPLICAS': str(lammps_x_replicas),
+            'LAMMPS_Y_REPLICAS': str(lammps_y_replicas),
+            'LAMMPS_Z_REPLICAS': str(lammps_z_replicas),
             'LAMMPS_TIME_STEPS': str(exp_params['lammps_time_steps']),
 
             'UR_NODES': str(exp_params['ur_nodes']),
@@ -467,25 +481,33 @@ if __name__ == "__main__":
     tests = [
         {
             'exp_name': 'milc36-jacobi36',
-            'jacobi_nodes': 36, 'jacobi_iters': 39, 'jacobi_layout': [4,3,3], 'jacobi_msg': 50_000, 'jacobi_compute_delay': 200,
-            'milc_nodes': 36, 'milc_iters': 120, 'milc_layout': [2,2,3,3], 'milc_msg': 497664, 'milc_compute_delay': 0.025,
-            'lammps_nodes': 0, 'lammps_x_replicas': 2, 'lammps_y_replicas': 11, 'lammps_z_replicas': 1, 'lammps_time_steps': 5,
+            'jacobi_nodes': 36, 'jacobi_iters': 39, 'jacobi_layout': (4,3,3), 'jacobi_msg': 50 * 1024, 'jacobi_compute_delay': 200,
+            'milc_nodes': 36, 'milc_iters': 120, 'milc_layout': [2,2,3,3], 'milc_msg': 486 * 1024, 'milc_compute_delay': 0.025,
+            'lammps_nodes': 0, 'lammps_replicas': (2,11,1), 'lammps_time_steps': 5,
             'ur_nodes': 0, 'ur_period': 726.609003,
             'extraparams': ['--extramem=1000000'],
         },
         #{
-        #    'exp_name': 'milc48-jacobi24',
-        #    'jacobi_nodes': 24, 'jacobi_layout': [4,2,3], 'jacobi_msg': 80*1024, 'jacobi_iters': 150, 'jacobi_compute_delay': 200,
-        #    'milc_nodes': 48, 'milc_iters': 100, 'milc_msg': 400*1024, 'milc_layout': [2,8,3,1], 'milc_compute_delay': 50,
-        #    'lammps_nodes': 0, 'lammps_x_replicas': 2, 'lammps_y_replicas': 11, 'lammps_z_replicas': 1, 'lammps_time_steps': 5,
+        #    'exp_name': 'lammps12-milc24-jacobi36',
+        #    'jacobi_nodes': 24, 'jacobi_iters': 39, 'jacobi_layout': (4,3,2), 'jacobi_msg': 50 * 1024, 'jacobi_compute_delay': 200,
+        #    'milc_nodes': 36, 'milc_iters': 120, 'milc_layout': [2,2,3,3], 'milc_msg': 486 * 1024, 'milc_compute_delay': 0.025,
+        #    'lammps_nodes': 12, 'lammps_replicas': (3,2,2), 'lammps_time_steps': 5,
         #    'ur_nodes': 0, 'ur_period': 726.609003,
         #    'extraparams': ['--extramem=1000000'],
         #},
         #{
-        #    'exp_name': '1-bandwidth-saturation',
-        #    'jacobi_nodes': 20, 'jacobi_layout': [4,5,1], 'jacobi_msg': 80*1024, 'jacobi_iters': 150, 'jacobi_compute_delay': 200,
+        #    'exp_name': 'milc48-jacobi24',
+        #    'jacobi_nodes': 24, 'jacobi_layout': (4,2,3), 'jacobi_msg': 80*1024, 'jacobi_iters': 150, 'jacobi_compute_delay': 200,
+        #    'milc_nodes': 48, 'milc_iters': 100, 'milc_msg': 400*1024, 'milc_layout': [2,8,3,1], 'milc_compute_delay': 50,
+        #    'lammps_nodes': 0, 'lammps_replicas': (2,11,1), 'lammps_time_steps': 5,
+        #    'ur_nodes': 0, 'ur_period': 726.609003,
+        #    'extraparams': ['--extramem=1000000'],
+        #},
+        #{
+        #    'exp_name': 'milc20-lammps22-jacobi20-ur8',
+        #    'jacobi_nodes': 20, 'jacobi_layout': (4,5,1), 'jacobi_msg': 80*1024, 'jacobi_iters': 150, 'jacobi_compute_delay': 200,
         #    'milc_nodes': 22, 'milc_iters': 100, 'milc_msg': 400*1024, 'milc_layout': [2,11,1,1], 'milc_compute_delay': 50,
-        #    'lammps_nodes': 22, 'lammps_x_replicas': 2, 'lammps_y_replicas': 11, 'lammps_z_replicas': 1, 'lammps_time_steps': 5,
+        #    'lammps_nodes': 22, 'lammps_replicas': (2,11,1), 'lammps_time_steps': 5,
         #    'ur_nodes': 8, 'ur_period': 726.609003,
         #    'extraparams': ['--extramem=1000000'],
         #},

@@ -9,8 +9,6 @@ Claude wrote most of this. I'm very grateful for it :)
 import os
 import sys
 import subprocess
-import tempfile
-import shutil
 import random
 import signal
 from pathlib import Path
@@ -87,13 +85,6 @@ class StressTestRunner:
                     pass
             except:
                 pass
-
-        # Restore configs
-        try:
-            self.restore_configs()
-            print("Configuration files restored.")
-        except Exception as e:
-            print(f"Warning: Failed to restore configs: {e}")
 
         print("Cleanup completed. Exiting...")
         sys.exit(1)
@@ -445,12 +436,20 @@ class StressTestRunner:
         stress_tests = [
             {
                 'exp_name': '1-bandwidth-saturation',
-                'jacobi_nodes': 20, 'jacobi_layout': '4,5,1', 'jacobi_msg': 80*1024, 'jacobi_iters': 150, 'jacobi_compute_delay': 200,
-                'milc_nodes': 22, 'milc_iters': 100, 'milc_msg': 400*1024, 'milc_layout': '2,11,1,1', 'milc_compute_delay': 50,
-                'lammps_nodes': 22, 'lammps_x_replicas': 2, 'lammps_y_replicas': 11, 'lammps_z_replicas': 1, 'lammps_time_steps': 5,
-                'ur_nodes': 8, 'ur_period': 726.609003,
+                'jacobi_nodes': 24, 'jacobi_layout': '4,2,3', 'jacobi_msg': 80*1024, 'jacobi_iters': 150, 'jacobi_compute_delay': 200,
+                'milc_nodes': 48, 'milc_iters': 100, 'milc_msg': 400*1024, 'milc_layout': '2,8,3,1', 'milc_compute_delay': 50,
+                'lammps_nodes': 0, 'lammps_x_replicas': 2, 'lammps_y_replicas': 11, 'lammps_z_replicas': 1, 'lammps_time_steps': 5,
+                'ur_nodes': 0, 'ur_period': 726.609003,
                 'extraparams': ['--extramem=1000000'],
             },
+            #{
+            #    'exp_name': '1-bandwidth-saturation',
+            #    'jacobi_nodes': 20, 'jacobi_layout': '4,5,1', 'jacobi_msg': 80*1024, 'jacobi_iters': 150, 'jacobi_compute_delay': 200,
+            #    'milc_nodes': 22, 'milc_iters': 100, 'milc_msg': 400*1024, 'milc_layout': '2,11,1,1', 'milc_compute_delay': 50,
+            #    'lammps_nodes': 22, 'lammps_x_replicas': 2, 'lammps_y_replicas': 11, 'lammps_z_replicas': 1, 'lammps_time_steps': 5,
+            #    'ur_nodes': 8, 'ur_period': 726.609003,
+            #    'extraparams': ['--extramem=1000000'],
+            #},
         ]
 
         # Backup configs and setup common configuration

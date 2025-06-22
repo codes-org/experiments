@@ -30,7 +30,7 @@
       "129000000"
     ]
   },
-  "jacobi3d": {
+  "${JACOBI_KEY_NAME}": {
     "argc": 11,
     "argv": [
       "jacobi3d",

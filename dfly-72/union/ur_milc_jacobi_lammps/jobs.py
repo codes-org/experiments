@@ -269,13 +269,17 @@ class UrJob(Job):
         return f'{self.nodes} {job_name} 0 {self.period}'
 
 
-@dataclass
 class Experiment:
     """Container for an experiment with multiple jobs."""
-    name: str
-    jobs: list[Job]
-    extraparams: list[str]
-    modes: dict[str, dict[str, str]]
+
+    def __init__(self, name: str, jobs: list[Job], extraparams: list[str], modes: dict[str, dict[str, str]]):
+        # Reset all job counters before processing jobs for this experiment
+        self.reset_all_job_counters()
+
+        self.name = name
+        self.jobs = jobs
+        self.extraparams = extraparams
+        self.modes = modes
 
     def get_total_nodes(self) -> int:
         """Get the total number of nodes needed for all jobs."""

@@ -7,35 +7,224 @@ import os
 import sys
 import subprocess
 import signal
+from collections.abc import Generator
+from contextlib import contextmanager
 from pathlib import Path
 from .jobs import Experiment
 from .config_generator import ConfigGenerator
 
 
-class TestRunner:
-    """Main test runner for CODES simulation experiments."""
+class MemoryLogger:
+    def __init__(self, scripts_dir: str):
+        self.scripts_dir: str = scripts_dir
+        self.process: subprocess.Popen[bytes] | None = None
 
-    def __init__(self, env_vars: dict[str, str], config_generator: ConfigGenerator, np: int = 3):
-        self.env_vars: dict[str, str] = env_vars
+    def start(self) -> bool:
+        try:
+            with open('memory-log.txt', 'w') as log_file:
+                self.process = subprocess.Popen([
+                    'bash', f"{self.scripts_dir}/memory-log.sh"
+                ], stdout=log_file)
+            return True
+        except Exception as e:
+            print(f"    ERROR: Failed to start memory logging: {e}")
+            return False
+
+    def stop(self) -> None:
+        if self.process:
+            try:
+                self.process.terminate()
+                _ = self.process.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                try:
+                    self.process.kill()
+                    _ = self.process.wait(timeout=1)
+                except:
+                    pass
+            except:
+                pass
+            self.process = None
+
+
+class Execute:
+    def __init__(self, binary_path: list[str], scripts_dir: str, env_vars: dict[str, str] | None = None, redirect_output: bool = True):
+        self.binary_path: list[str] = binary_path
+        self.env_vars: dict[str, str] = env_vars or {}
+        self.memory_logger: MemoryLogger = MemoryLogger(scripts_dir)
+        self.process: subprocess.Popen[bytes] | None = None
+        self.interrupted: bool = False
+        self.redirect_output: bool = redirect_output
+
+    def __call__(self, output_dir: str, additional_args: list[str] | None = None) -> bool:
+        complete_command = self.binary_path + (additional_args or [])
+        output_path = Path(output_dir)
+
+        with self.execution_context(output_path, self.env_vars):
+            if self.interrupted:
+                return False
+            return self._execute_command(complete_command)
+
+    @contextmanager
+    def execution_context(self, output_dir: Path, env_vars: dict[str, str]) -> Generator[None, None, None]:
+        original_cwd = Path.cwd()
+        original_env = os.environ.copy()
+
+        try:
+            output_dir.mkdir(exist_ok=True)
+            os.chdir(output_dir)
+            os.environ.update(env_vars)
+
+            if not self.memory_logger.start():
+                raise RuntimeError("Failed to start memory logging")
+
+            yield
+
+        finally:
+            self._cleanup_all()
+            os.environ.clear()
+            os.environ.update(original_env)
+            os.chdir(original_cwd)
+
+    def _execute_command(self, command: list[str]) -> bool:
+        try:
+            if self.redirect_output:
+                return self._execute_with_file_output(command)
+            else:
+                return self._execute_with_interactive_output(command)
+
+        except KeyboardInterrupt:
+            print("    Interrupted during command execution")
+            return False
+        except Exception as e:
+            print(f"    ERROR: Exception during command execution: {e}")
+            return False
+
+    def _execute_with_file_output(self, command: list[str]) -> bool:
+        with open('model-result.txt', 'w') as stdout_file, \
+             open('model-result.stderr.txt', 'w') as stderr_file:
+
+            self.process = subprocess.Popen(
+                command,
+                stdout=stdout_file,
+                stderr=stderr_file,
+                preexec_fn=os.setsid
+            )
+
+            returncode = self.process.wait()
+            self.process = None
+
+            if returncode != 0:
+                print(f"    ERROR: Command failed with return code {returncode}")
+                return False
+            return True
+
+    def _execute_with_interactive_output(self, command: list[str]) -> bool:
+        def setup_child_process():
+            # Create new session and process group - isolates subprocess from parent's signal handling
+            os.setsid()
+            # Attempt to set as foreground process group for proper terminal signal delivery
+            if os.isatty(sys.stdin.fileno()):
+                try:
+                    os.tcsetpgrp(sys.stdin.fileno(), os.getpid())
+                except OSError:
+                    # Some terminal environments don't support this operation
+                    pass
+
+        # Connect subprocess directly to terminal for full interactivity
+        self.process = subprocess.Popen(
+            command,
+            stdin=sys.stdin,
+            stdout=sys.stdout,
+            stderr=sys.stderr,
+            preexec_fn=setup_child_process
+        )
+
+        # Forward SIGINT (Ctrl+C) from parent to subprocess process group
+        def forward_signal_to_subprocess(signum: int, _frame: object):
+            if self.process is None:
+                return
+            try:
+                # Send signal to entire process group, not just main process
+                os.killpg(self.process.pid, signum)
+            except (ProcessLookupError, OSError):
+                # Process may have already terminated
+                pass
+
+        # Replace parent's signal handler with forwarding handler during subprocess execution
+        original_handler = signal.signal(signal.SIGINT, forward_signal_to_subprocess)
+
+        try:
+            returncode = self.process.wait()
+            self.process = None
+
+            if returncode != 0:
+                print(f"    ERROR: Command failed with return code {returncode}")
+                return False
+            return True
+
+        except Exception as e:
+            print(f"    ERROR: Exception during interactive execution: {e}")
+            return False
+        finally:
+            # Restore original signal handler
+            _ = signal.signal(signal.SIGINT, original_handler)
+
+            # Restore parent as foreground process group if in a terminal
+            if os.isatty(sys.stdin.fileno()):
+                try:
+                    os.tcsetpgrp(sys.stdin.fileno(), os.getpgrp())
+                except OSError:
+                    pass
+
+    def _kill_process(self) -> None:
+        if self.process:
+            try:
+                pgid = os.getpgid(self.process.pid)
+                os.killpg(pgid, signal.SIGTERM)
+                _ = self.process.wait(timeout=3)
+            except (subprocess.TimeoutExpired, ProcessLookupError, OSError):
+                try:
+                    pgid = os.getpgid(self.process.pid)
+                    os.killpg(pgid, signal.SIGKILL)
+                    _ = self.process.wait(timeout=2)
+                except (ProcessLookupError, OSError):
+                    try:
+                        self.process.kill()
+                        _ = self.process.wait(timeout=1)
+                    except:
+                        pass
+                except:
+                    pass
+            except:
+                pass
+            self.process = None
+
+    def _cleanup_all(self) -> None:
+        self._kill_process()
+        self.memory_logger.stop()
+
+    def interrupt(self) -> None:
+        self.interrupted = True
+        self._cleanup_all()
+
+
+class TestRunner:
+    def __init__(
+            self,
+            template_vars: dict[str, str],
+            config_generator: ConfigGenerator,
+            execute_with: Execute,
+    ):
+        self.template_vars: dict[str, str] = template_vars
         self.config_generator: ConfigGenerator = config_generator
-        self.np: int = np
         self.failed_experiments: list[str] = []
-        self.current_mpi_process: subprocess.Popen[bytes] | None = None
-        self.current_mem_log_process: subprocess.Popen[bytes] | None = None
         self.interrupted: bool = False
         self.cleanup_in_progress: bool = False
+        self.executor: Execute = execute_with
 
-        # Set up signal handler for graceful shutdown
         _ = signal.signal(signal.SIGINT, self._signal_handler)
 
-        # Validate required environment variables
-        required_vars = ['PATH_TO_CODES_BUILD', 'SCRIPTS_ROOT_DIR']
-        for var in required_vars:
-            if not os.environ.get(var):
-                raise RuntimeError(f"Required environment variable {var} not set")
-
     def _signal_handler(self, _signum: int, _frame: object) -> None:
-        """Handle Ctrl+C gracefully"""
         if self.cleanup_in_progress:
             print("\nForce exiting...")
             os._exit(1)
@@ -43,66 +232,21 @@ class TestRunner:
         self.cleanup_in_progress = True
         print("\n\nReceived interrupt signal (Ctrl+C). Cleaning up...")
         self.interrupted = True
-
-        # Kill current MPI process if running - use process group killing
-        if self.current_mpi_process:
-            print("Terminating MPI process and its children...")
-            try:
-                # Try to kill the entire process group
-                pgid = os.getpgid(self.current_mpi_process.pid)
-                os.killpg(pgid, signal.SIGTERM)
-
-                # Wait a short time for graceful termination
-                try:
-                    _ = self.current_mpi_process.wait(timeout=3)
-                except subprocess.TimeoutExpired:
-                    print("Force killing MPI process group...")
-                    os.killpg(pgid, signal.SIGKILL)
-                    _ = self.current_mpi_process.wait(timeout=2)
-
-            except (ProcessLookupError, PermissionError, OSError):
-                # Process group might not exist or already dead
-                try:
-                    # Fallback to killing just the main process
-                    self.current_mpi_process.kill()
-                    _ = self.current_mpi_process.wait(timeout=2)
-                except:
-                    pass
-
-        # Kill memory logging process if running
-        if self.current_mem_log_process:
-            print("Terminating memory logging process...")
-            try:
-                self.current_mem_log_process.terminate()
-                _ = self.current_mem_log_process.wait(timeout=2)
-            except subprocess.TimeoutExpired:
-                try:
-                    self.current_mem_log_process.kill()
-                    _ = self.current_mem_log_process.wait(timeout=1)
-                except:
-                    pass
-            except:
-                pass
+        self.executor.interrupt()
 
         print("Cleanup completed. Exiting...")
         sys.exit(1)
 
-    def run_simulation_variation(
-            self,
-            exp_config_dir: Path,
-            variation_name: str,
-            extraparams: list[str],
-            env_vars: dict[str, str],
-    ) -> bool:
+    def run_simulation(self, exp_config_dir: Path, variation_name: str,
+                               extraparams: list[str], template_vars: dict[str, str]) -> bool:
         print(f"  Running simulation variation: {variation_name}")
 
-        conf_path = self.config_generator.generate_network_config(exp_config_dir, variation_name, env_vars)
-        executable_path = os.environ['PATH_TO_CODES_BUILD'] + '/src/model-net-mpi-replay'
+        conf_path = self.config_generator.generate_network_config(exp_config_dir, variation_name, template_vars)
         args_file = exp_config_dir / f'args-file.conf'
-        params = [executable_path, f'--args-file={str(args_file)}'] + extraparams + ['--', str(conf_path)]
-        output_dir = f"{exp_config_dir.name}/{variation_name}"
 
-        success = self.mpirun_do(output_dir, params)
+        additional_args = [f'--args-file={str(args_file)}'] + extraparams + ['--', str(conf_path)]
+        output_dir = f"{exp_config_dir.name}/{variation_name}"
+        success = self.executor(output_dir, additional_args)
 
         if not success:
             print(f"    FAILED: Variation {variation_name} failed to complete")
@@ -111,107 +255,8 @@ class TestRunner:
             print(f"    SUCCESS: Variation {variation_name} completed successfully")
             return True
 
-    def mpirun_do(self, output_dir_str: str, args: list[str]) -> bool:
-        """Equivalent of the mpirun_do function. Returns True on success, False on failure."""
-        output_dir = Path(output_dir_str)
-        output_dir.mkdir(exist_ok=True)
-
-        original_cwd = Path.cwd()
-        os.chdir(output_dir)
-
-        success = True
-
-        try:
-            # Check if we've been interrupted
-            if self.interrupted:
-                return False
-
-            # Start memory logging
-            self.current_mem_log_process = subprocess.Popen([
-                'bash', f"{os.environ['SCRIPTS_ROOT_DIR']}/memory-log.sh"
-            ], stdout=open('memory-log.txt', 'w'))
-
-            # Run the simulation
-            with open('model-result.txt', 'w') as stdout_file, \
-                 open('model-result.stderr.txt', 'w') as stderr_file:
-
-                cmd = ['mpirun', '-np', str(self.np)] + args
-                # Start MPI process in its own process group for easier cleanup
-                self.current_mpi_process = subprocess.Popen(
-                    cmd,
-                    stdout=stdout_file,
-                    stderr=stderr_file,
-                    preexec_fn=os.setsid  # Create new process group
-                )
-
-                # Wait for process to complete
-                try:
-                    returncode = self.current_mpi_process.wait()
-                    if returncode != 0:
-                        print(f"    ERROR: mpirun failed with return code {returncode}")
-                        success = False
-                except KeyboardInterrupt:
-                    # This shouldn't happen as signal handler should catch it first
-                    # but just in case
-                    print("    Interrupted during MPI execution")
-                    success = False
-
-                self.current_mpi_process = None
-
-        except KeyboardInterrupt:
-            print("    Interrupted during mpirun setup")
-            success = False
-        except Exception as e:
-            print(f"    ERROR: Exception during mpirun: {e}")
-            success = False
-
-        finally:
-            # Clean up processes
-            if self.current_mpi_process:
-                try:
-                    # Try to kill the process group first
-                    pgid = os.getpgid(self.current_mpi_process.pid)
-                    os.killpg(pgid, signal.SIGTERM)
-                    _ = self.current_mpi_process.wait(timeout=3)
-                except (subprocess.TimeoutExpired, ProcessLookupError, OSError) as e:
-                    try:
-                        # Force kill the process group (only if pgid was successfully obtained)
-                        try:
-                            pgid = os.getpgid(self.current_mpi_process.pid)
-                            os.killpg(pgid, signal.SIGKILL)
-                            _ = self.current_mpi_process.wait(timeout=2)
-                        except (ProcessLookupError, OSError):
-                            # Fallback to killing just the main process
-                            self.current_mpi_process.kill()
-                            _ = self.current_mpi_process.wait(timeout=1)
-                    except:
-                        # Final fallback to killing just the main process
-                        try:
-                            self.current_mpi_process.kill()
-                            _ = self.current_mpi_process.wait(timeout=1)
-                        except:
-                            pass
-                except:
-                    pass
-                self.current_mpi_process = None
-
-            if self.current_mem_log_process:
-                try:
-                    self.current_mem_log_process.terminate()
-                    _ = self.current_mem_log_process.wait(timeout=2)
-                except subprocess.TimeoutExpired:
-                    self.current_mem_log_process.kill()
-                    _ = self.current_mem_log_process.wait()
-                except:
-                    pass
-                self.current_mem_log_process = None
-
-            os.chdir(original_cwd)
-
-        return success
-
-    def run_experiment_with_config_variations(self, experiment: Experiment, env_vars: dict[str, str]) -> None:
-        exp_config_dir = self.config_generator.generate_base_config(experiment, env_vars)
+    def run_experiment_with_config_variations(self, experiment: Experiment, template_vars: dict[str, str]) -> None:
+        exp_config_dir = self.config_generator.generate_base_config(experiment, template_vars)
         exp_name = experiment.name
 
         print(f"Running all simulation variations for: {exp_name}")
@@ -225,7 +270,7 @@ class TestRunner:
                 print("Experiment interrupted by user")
                 break
 
-            success = self.run_simulation_variation(exp_config_dir, variation_name, experiment.extraparams, env_vars | overridding_vars)
+            success = self.run_simulation(exp_config_dir, variation_name, experiment.extraparams, template_vars | overridding_vars)
             if success:
                 successful_variations.append(variation_name)
             else:
@@ -251,7 +296,7 @@ class TestRunner:
                 print("Test suite interrupted by user")
                 break
 
-            self.run_experiment_with_config_variations(experiment, self.env_vars)
+            self.run_experiment_with_config_variations(experiment, self.template_vars)
 
         print("============================================")
         print("TEST SUITE COMPLETED")

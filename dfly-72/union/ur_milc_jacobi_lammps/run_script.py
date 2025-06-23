@@ -11,19 +11,21 @@ import sys
 from pathlib import Path
 from .config_generator import ConfigGenerator
 from .jobs import Experiment, JacobiJob, MilcJob, LammpsJob, UrJob
-from .runner import TestRunner
+from .runner import TestRunner, Execute
 
-script_dir: Path = Path(__file__).parent
-configs_path: str = os.environ.get('PATH_TO_SCRIPT_DIR', str(script_dir)) + '/conf'
-exp_folder: Path = Path.cwd()
+scripts_root_dir = os.environ['SCRIPTS_ROOT_DIR']
+this_script_dir: Path = Path(__file__).parent
+configs_path = os.environ.get('PATH_TO_SCRIPT_DIR', str(this_script_dir)) + '/conf'
+executable_path = os.environ['PATH_TO_CODES_BUILD'] + '/src/model-net-mpi-replay'
+exp_folder = Path.cwd()
 
 np = 3
 
 # This will affect all variables to replace in the templates
-env_vars = {
+template_vars = {
     # System variables
     'CPU_FREQ': str(4e9),  # in Hz
-    'SCRIPTS_ROOT_DIR': os.environ['SCRIPTS_ROOT_DIR'],
+    'SCRIPTS_ROOT_DIR': scripts_root_dir,
     'PATH_TO_CODES_BUILD': os.environ['PATH_TO_CODES_BUILD'],
 
     # Template variables
@@ -177,8 +179,24 @@ if __name__ == "__main__":
     ]
 
     try:
+        execute = Execute(
+            binary_path=['mpirun', '-np', str(np), executable_path],
+            scripts_dir=scripts_root_dir,
+        )
+        #execute = Execute(
+        #    binary_path=[os.environ['SCRIPTS_ROOT_DIR'] + '/tmux-mpi', str(np), 'gdb', '--args', executable_path],
+        #    scripts_dir=scripts_root_dir,
+        #    env_vars={'TMUX_MPI_MODE': 'pane', 'TMUX_MPI_SYNC_PANES': '1'},
+        #    redirect_output=False,
+        #)
+        #execute = Execute(
+        #    ['gdb', '--args', executable_path],
+        #    scripts_dir=scripts_root_dir,
+        #    redirect_output=False,
+        #)
+
         config_generator = ConfigGenerator(configs_path, exp_folder)
-        runner = TestRunner(env_vars, config_generator, np=np)
+        runner = TestRunner(template_vars, config_generator, execute_with=execute)
         runner.run_tests(experiments)
     except KeyboardInterrupt:
         # This should be handled by the signal handler, but just in case

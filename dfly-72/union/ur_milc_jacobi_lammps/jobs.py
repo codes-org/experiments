@@ -49,7 +49,7 @@ class Job(ABC):
 
     @property
     @abstractmethod
-    def env_vars(self) -> dict[str, str]:
+    def template_vars(self) -> dict[str, str]:
         pass
 
     @abstractmethod
@@ -104,7 +104,7 @@ class JacobiJob(Job):
 
     @property
     @override
-    def env_vars(self) -> dict[str, str]:
+    def template_vars(self) -> dict[str, str]:
         proc_x, proc_y, proc_z = self.layout
         jacobi_compute_delay = int(self.compute_delay * 1e3)
 
@@ -158,7 +158,7 @@ class MilcJob(Job):
 
     @property
     @override
-    def env_vars(self) -> dict[str, str]:
+    def template_vars(self) -> dict[str, str]:
         return {
             'MILC_ITERS': str(self.iters),
             'MILC_MSG_SIZE': str(self.msg),
@@ -208,7 +208,7 @@ class LammpsJob(Job):
 
     @property
     @override
-    def env_vars(self) -> dict[str, str]:
+    def template_vars(self) -> dict[str, str]:
         lammps_x_replicas, lammps_y_replicas, lammps_z_replicas = self.replicas
 
         return {
@@ -253,7 +253,7 @@ class UrJob(Job):
 
     @property
     @override
-    def env_vars(self) -> dict[str, str]:
+    def template_vars(self) -> dict[str, str]:
         return {
             'UR_NODES': str(self.nodes),
             'UR_PERIOD': str(self.period),

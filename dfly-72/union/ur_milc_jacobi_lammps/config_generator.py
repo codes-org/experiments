@@ -1,6 +1,6 @@
 """
 Configuration file generator for CODES simulation experiments.
-Handles template processing, environment variable substitution, and node allocation.
+Handles template processing.
 """
 
 import random
@@ -17,7 +17,7 @@ class ConfigGenerator:
         self.exp_folder: Path = exp_folder
 
 
-    def generate_base_config(self, experiment: Experiment, env_vars: dict[str, str]) -> Path:
+    def generate_base_config(self, experiment: Experiment, template_vars: dict[str, str]) -> Path:
         """Generate base configuration for an experiment."""
         experiment.validate_jobs()
 
@@ -35,17 +35,17 @@ class ConfigGenerator:
         exp_config_dir.mkdir(exist_ok=True)
 
         # Add experiment-specific variables
-        experiment_env_vars = env_vars | {
+        experiment_template_vars = template_vars | {
             'CURRENT_EXP_DIR': str(exp_config_dir),
         }
 
         # Generate configuration files directly
         jobs_by_type = experiment.get_jobs_by_type()
-        self._generate_config_files(exp_config_dir, jobs_by_type, experiment_env_vars)
+        self._generate_config_files(exp_config_dir, jobs_by_type, experiment_template_vars)
 
         return exp_config_dir
 
-    def _generate_config_files(self, exp_config_dir: Path, jobs_by_type: dict[str, list[tuple[Job, str]]], env_vars: dict[str, str]) -> None:
+    def _generate_config_files(self, exp_config_dir: Path, jobs_by_type: dict[str, list[tuple[Job, str]]], template_vars: dict[str, str]) -> None:
         """Generate all configuration files for the experiment."""
 
         # Write direct config files (no templates needed)
@@ -54,12 +54,12 @@ class ConfigGenerator:
         self._write_workloads_allocation(exp_config_dir, jobs_by_type)
 
         # Process job-specific templates
-        self._process_job_templates(exp_config_dir, jobs_by_type, env_vars)
+        self._process_job_templates(exp_config_dir, jobs_by_type, template_vars)
 
         # Process args-file template
         src_path = Path(self.configs_path) / 'args-file.conf'
         dst_path = exp_config_dir / 'args-file.conf'
-        self.process_template(src_path, dst_path, env_vars)
+        self.process_template(src_path, dst_path, template_vars)
 
     def _write_workloads_settings(self, exp_config_dir: Path, jobs_by_type: dict[str, list[tuple[Job, str]]]) -> None:
         """Write workloads-settings.conf file directly."""
@@ -116,7 +116,7 @@ class ConfigGenerator:
         with open(exp_config_dir / 'workloads-allocation.conf', 'w') as f:
             _ = f.write(content)
 
-    def _process_job_templates(self, exp_config_dir: Path, jobs_by_type: dict[str, list[tuple[Job, str]]], env_vars: dict[str, str]) -> None:
+    def _process_job_templates(self, exp_config_dir: Path, jobs_by_type: dict[str, list[tuple[Job, str]]], template_vars: dict[str, str]) -> None:
         """Process all job templates using job.template_path and job.config_filename"""
 
         # Handle all job types generically using their template_path and config_filename
@@ -130,10 +130,10 @@ class ConfigGenerator:
                     dst_path = exp_config_dir / config_filename
 
                     # Combine global env vars with job-specific env vars
-                    combined_env_vars = env_vars | job.env_vars
-                    self.process_template(src_path, dst_path, combined_env_vars)
+                    combined_template_vars = template_vars | job.template_vars
+                    self.process_template(src_path, dst_path, combined_template_vars)
 
-    def process_template(self, src_path: Path, dst_path: Path, env_vars: dict[str, str]) -> None:
+    def process_template(self, src_path: Path, dst_path: Path, template_vars: dict[str, str]) -> None:
         """Unified template processor - handles all template → config transformations."""
         if not src_path.exists():
             return
@@ -142,18 +142,17 @@ class ConfigGenerator:
             template_content = f.read()
 
         template = Template(template_content)
-        substituted_content = template.substitute(env_vars)
+        substituted_content = template.substitute(template_vars)
         with open(dst_path, 'w') as f:
             _ = f.write(substituted_content)
 
-    def generate_network_config(self, exp_config_dir: Path, variation_name: str, env_vars: dict[str, str]) -> Path:
+    def generate_network_config(self, exp_config_dir: Path, variation_name: str, template_vars: dict[str, str]) -> Path:
         dst_file = f'dfdally-72-par-{variation_name}.conf'
 
         # Add experiment-specific variables
-        template_vars = env_vars | {
+        template_vars = template_vars | {
             'CURRENT_EXP_NAME': exp_config_dir.name,
             'CURRENT_EXP_DIR': str(exp_config_dir),
-            'PATH_TO_CONNECTIONS': self.configs_path,
         }
 
         src_path = Path(self.configs_path) / 'dfdally-72-par.conf.in'

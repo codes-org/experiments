@@ -179,16 +179,19 @@ if __name__ == "__main__":
     ]
 
     try:
+        # normal execution mode
         execute = Execute(
             binary_path=['mpirun', '-np', str(np), executable_path],
             scripts_dir=scripts_root_dir,
         )
+        # debug using tmux-mpi (in parallel)
         #execute = Execute(
         #    binary_path=[os.environ['SCRIPTS_ROOT_DIR'] + '/tmux-mpi', str(np), 'gdb', '--args', executable_path],
         #    scripts_dir=scripts_root_dir,
         #    env_vars={'TMUX_MPI_MODE': 'pane', 'TMUX_MPI_SYNC_PANES': '1'},
         #    redirect_output=False,
         #)
+        # debug in sequential
         #execute = Execute(
         #    ['gdb', '--args', executable_path],
         #    scripts_dir=scripts_root_dir,

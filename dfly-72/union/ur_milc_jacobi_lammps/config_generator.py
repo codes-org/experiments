@@ -146,9 +146,8 @@ class ConfigGenerator:
         with open(dst_path, 'w') as f:
             _ = f.write(substituted_content)
 
-    def generate_mode_network_config(self, exp_config_dir: Path, mode_name: str, env_vars: dict[str, str]) -> Path:
-        """Generate mode-specific network configuration file."""
-        dst_file = f'dfdally-72-par-{mode_name}.conf'
+    def generate_network_config(self, exp_config_dir: Path, variation_name: str, env_vars: dict[str, str]) -> Path:
+        dst_file = f'dfdally-72-par-{variation_name}.conf'
 
         # Add experiment-specific variables
         template_vars = env_vars | {

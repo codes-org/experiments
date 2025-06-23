@@ -17,7 +17,9 @@ script_dir: Path = Path(__file__).parent
 configs_path: str = os.environ.get('PATH_TO_SCRIPT_DIR', str(script_dir)) + '/conf'
 exp_folder: Path = Path.cwd()
 
-# Single consolidated environment variables dictionary
+np = 3
+
+# This will affect all variables to replace in the templates
 env_vars = {
     # System variables
     'CPU_FREQ': str(4e9),  # in Hz
@@ -38,7 +40,7 @@ env_vars = {
 if __name__ == "__main__":
 
     # Define simulation modes
-    network_config_variations = {
+    net_config_variations = {
         #'high-fidelity': {
         #    'NETWORK_SURR_ON': '0',
         #    'APP_SURR_ON': '0'
@@ -59,10 +61,6 @@ if __name__ == "__main__":
         },
     }
 
-    common_config: dict[str, float | str | list[str]] = {
-        'extraparams': ['--extramem=100000'],
-    }
-
     # Define test experiments using new Experiment and Job classes
     experiments = [
         Experiment(
@@ -73,7 +71,7 @@ if __name__ == "__main__":
                 MilcJob(nodes=36, iters=120, layout=[2, 2, 3, 3], msg=10 * 1024, compute_delay=0.025),
             ],
             extraparams=['--extramem=1000000'],
-            modes=network_config_variations,
+            net_config_variations=net_config_variations,
         ),
 
         Experiment(
@@ -85,7 +83,7 @@ if __name__ == "__main__":
                 UrJob(nodes=6, period=1200),
             ],
             extraparams=['--extramem=1000000'],
-            modes=network_config_variations,
+            net_config_variations=net_config_variations,
         ),
 
         Experiment(
@@ -96,7 +94,7 @@ if __name__ == "__main__":
                 MilcJob(nodes=36, iters=120, layout=[2, 2, 3, 3], msg=486 * 1024, compute_delay=0.025),
             ],
             extraparams=['--extramem=1000000'],
-            modes=network_config_variations,
+            net_config_variations=net_config_variations,
         ),
 
         Experiment(
@@ -106,7 +104,7 @@ if __name__ == "__main__":
                 JacobiJob(nodes=36, iters=10, layout=(4, 3, 3), msg=10 * 1024, compute_delay=500),
             ],
             extraparams=['--extramem=1000000'],
-            modes=network_config_variations,
+            net_config_variations=net_config_variations,
         ),
 
         Experiment(
@@ -117,7 +115,7 @@ if __name__ == "__main__":
                 LammpsJob(nodes=12, time_steps=5, replicas=(3, 2, 2)),
             ],
             extraparams=['--extramem=1000000'],
-            modes=network_config_variations,
+            net_config_variations=net_config_variations,
         ),
 
         Experiment(
@@ -127,7 +125,7 @@ if __name__ == "__main__":
                 MilcJob(nodes=48, iters=100, layout=[2, 8, 3, 1], msg=400 * 1024, compute_delay=50),
             ],
             extraparams=['--extramem=1000000'],
-            modes=network_config_variations,
+            net_config_variations=net_config_variations,
         ),
 
         Experiment(
@@ -139,7 +137,7 @@ if __name__ == "__main__":
                 UrJob(nodes=6, period=1200),
             ],
             extraparams=['--extramem=1000000'],
-            modes=network_config_variations,
+            net_config_variations=net_config_variations,
         ),
 
         Experiment(
@@ -151,7 +149,7 @@ if __name__ == "__main__":
                 UrJob(nodes=8, period=726.609003),
             ],
             extraparams=['--extramem=1000000'],
-            modes=network_config_variations,
+            net_config_variations=net_config_variations,
         ),
 
         Experiment(
@@ -163,7 +161,7 @@ if __name__ == "__main__":
                 UrJob(nodes=8, period=1000),
             ],
             extraparams=['--extramem=1000000'],
-            modes=network_config_variations,
+            net_config_variations=net_config_variations,
         ),
 
         Experiment(
@@ -174,14 +172,14 @@ if __name__ == "__main__":
                 UrJob(nodes=8, period=726.609003),
             ],
             extraparams=['--extramem=1000000'],
-            modes=network_config_variations,
+            net_config_variations=net_config_variations,
         ),
     ]
 
     try:
         config_generator = ConfigGenerator(configs_path, exp_folder)
-        runner = TestRunner(env_vars, config_generator)
-        runner.run_tests(common_config, experiments)
+        runner = TestRunner(env_vars, config_generator, np=np)
+        runner.run_tests(experiments)
     except KeyboardInterrupt:
         # This should be handled by the signal handler, but just in case
         print("\nScript interrupted by user", file=sys.stderr)

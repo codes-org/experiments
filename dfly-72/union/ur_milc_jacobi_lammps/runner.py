@@ -94,13 +94,9 @@ class TestRunner:
             extraparams: list[str],
             env_vars: dict[str, str],
     ) -> bool:
-        """Run a specific simulation mode. Returns True on success, False on failure."""
         print(f"  Running simulation mode: {mode_name}")
 
-        # Set mode-specific environment variables
-        os.environ.update(mode_settings)
-
-        conf_path = self.config_generator.generate_mode_network_config(exp_config_dir, mode_name, env_vars)
+        conf_path = self.config_generator.generate_mode_network_config(exp_config_dir, mode_name, env_vars | mode_settings)
         executable_path = os.environ['PATH_TO_CODES_BUILD'] + '/src/model-net-mpi-replay'
         args_file = exp_config_dir / f'args-file.conf'
         params = [executable_path, f'--args-file={str(args_file)}'] + extraparams + ['--', str(conf_path)]
@@ -248,9 +244,6 @@ class TestRunner:
         """Run all test experiments."""
         print("Starting Testing Suite")
         print("============================================")
-
-        # Backup configs and setup common configuration
-        os.environ.update(self.default_params)
 
         # Run all tests
         for experiment in experiments:

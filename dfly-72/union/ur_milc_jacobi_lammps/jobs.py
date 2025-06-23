@@ -274,12 +274,12 @@ class Experiment:
 
     def __init__(self, name: str, jobs: list[Job], extraparams: list[str], modes: dict[str, dict[str, str]]):
         # Reset all job counters before processing jobs for this experiment
-        self.reset_all_job_counters()
+        reset_all_job_counters()
 
-        self.name = name
-        self.jobs = jobs
-        self.extraparams = extraparams
-        self.modes = modes
+        self.name: str = name
+        self.jobs: list[Job] = jobs
+        self.extraparams: list[str] = extraparams
+        self.modes: dict[str, dict[str, str]] = modes
 
     def get_total_nodes(self) -> int:
         """Get the total number of nodes needed for all jobs."""
@@ -311,10 +311,10 @@ class Experiment:
 
         return result
 
-    @classmethod
-    def reset_all_job_counters(cls):
-        """Reset all job type counters for testing purposes"""
-        JacobiJob.reset_counters()
-        MilcJob.reset_counters()
-        LammpsJob.reset_counters()
-        UrJob.reset_counters()
+
+def reset_all_job_counters():
+    """Reset all job type counters for testing purposes"""
+    JacobiJob.reset_counters()
+    MilcJob.reset_counters()
+    LammpsJob.reset_counters()
+    UrJob.reset_counters()

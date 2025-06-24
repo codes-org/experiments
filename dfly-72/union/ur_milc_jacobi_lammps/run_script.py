@@ -13,6 +13,7 @@ from .config_generator import ConfigGenerator
 from .jobs import Experiment, JacobiJob, MilcJob, LammpsJob, UrJob
 from .runner import TestRunner, Execute
 
+seed = 14829 # Same seed makes the simulation deterministic
 scripts_root_dir = os.environ['SCRIPTS_ROOT_DIR']
 this_script_dir: Path = Path(__file__).parent
 configs_path = os.environ.get('PATH_TO_SCRIPT_DIR', str(this_script_dir)) + '/conf'
@@ -33,7 +34,8 @@ template_vars = {
     'NETWORK_SURR_ON': '0',
     'NETWORK_MODE': 'nothing',
     'APP_SURR_ON': '0',
-    'APP_DIRECTOR_MODE': 'every-n-gvt',
+    # options: 'every-n-gvt' (non-deterministic switch) and 'every-n-nanoseconds' (deterministic switch)
+    'APP_DIRECTOR_MODE': 'every-n-nanoseconds',
     'EVERY_N_GVTS': '1500',
     'EVERY_NSECS': '1.0e6',
     'ITERS_TO_COLLECT': '2'
@@ -198,7 +200,7 @@ if __name__ == "__main__":
         #    redirect_output=False,
         #)
 
-        config_generator = ConfigGenerator(configs_path, exp_folder)
+        config_generator = ConfigGenerator(configs_path, exp_folder, random_seed=seed, random_allocation=True)
         runner = TestRunner(template_vars, config_generator, execute_with=execute)
         runner.run_tests(experiments)
     except KeyboardInterrupt:

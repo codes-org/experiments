@@ -12,9 +12,11 @@ from .jobs import Experiment, Job
 class ConfigGenerator:
     """Handles generation of configuration files for experiments."""
 
-    def __init__(self, configs_path: str, exp_folder: Path):
+    def __init__(self, configs_path: str, exp_folder: Path, random_seed: int | None = None, random_allocation: bool = True):
         self.configs_path: str = configs_path
         self.exp_folder: Path = exp_folder
+        self.random_seed: int | None = random_seed
+        self.random_allocation: bool = random_allocation
 
 
     def generate_base_config(self, experiment: Experiment, template_vars: dict[str, str]) -> Path:
@@ -101,7 +103,17 @@ class ConfigGenerator:
 
         # Generate allocation lines directly from the job allocations we created
         total_needed = sum(job.nodes for job_list in jobs_by_type.values() for job, _ in job_list)
-        all_nodes = random.sample(range(72), total_needed)
+
+        if self.random_allocation:
+            prev_state = None
+            if self.random_seed is not None:
+                prev_state = random.getstate()
+                random.seed(self.random_seed)
+            all_nodes = random.sample(range(72), total_needed)
+            if self.random_seed is not None and prev_state:
+                random.setstate(prev_state)
+        else:
+            all_nodes = list(range(72))
 
         idx = 0
         # Generate allocation lines in the same order as workloads-settings.conf

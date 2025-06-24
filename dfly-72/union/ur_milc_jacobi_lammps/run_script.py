@@ -45,19 +45,19 @@ if __name__ == "__main__":
 
     # Define simulation modes
     net_config_variations = {
-        #'high-fidelity': {
-        #    'NETWORK_SURR_ON': '0',
-        #    'APP_SURR_ON': '0'
-        #},
-        #'app-surrogate': {
-        #    'NETWORK_SURR_ON': '0',
-        #    'APP_SURR_ON': '1'
-        #},
-        #'app-and-network': {
-        #    'NETWORK_SURR_ON': '1',
-        #    'APP_SURR_ON': '1',
-        #    'NETWORK_MODE': 'nothing'
-        #},
+        'high-fidelity': {
+            'NETWORK_SURR_ON': '0',
+            'APP_SURR_ON': '0'
+        },
+        'app-surrogate': {
+            'NETWORK_SURR_ON': '0',
+            'APP_SURR_ON': '1'
+        },
+        'app-and-network': {
+            'NETWORK_SURR_ON': '1',
+            'APP_SURR_ON': '1',
+            'NETWORK_MODE': 'nothing'
+        },
         'app-and-network-freezing': {
             'NETWORK_SURR_ON': '1',
             'APP_SURR_ON': '1',
@@ -68,21 +68,10 @@ if __name__ == "__main__":
     # Define test experiments using new Experiment and Job classes
     experiments = [
         Experiment(
-            '01-jacobi12-milc10-milc36',
+            '01-jacobi12-milc10-milc30-ur6',
             [
                 JacobiJob(nodes=12, iters=39, layout=(2, 3, 2), msg=50 * 1024, compute_delay=200),
-                MilcJob(nodes=10, iters=20, layout=[5, 2], msg=480 * 1024, compute_delay=10e3),
-                MilcJob(nodes=36, iters=120, layout=[2, 2, 3, 3], msg=10 * 1024, compute_delay=0.025),
-            ],
-            extraparams=['--extramem=1000000'],
-            net_config_variations=net_config_variations,
-        ),
-
-        Experiment(
-            '02-jacobi12-milc10-milc30-ur6',
-            [
-                JacobiJob(nodes=12, iters=39, layout=(2, 3, 2), msg=50 * 1024, compute_delay=200),
-                MilcJob(nodes=10, iters=20, layout=[5, 2], msg=480 * 1024, compute_delay=10e3),
+                MilcJob(nodes=10, iters=30, layout=[5, 2], msg=480 * 1024, compute_delay=1500),
                 MilcJob(nodes=30, iters=120, layout=[5, 2, 3], msg=10 * 1024, compute_delay=0.025),
                 UrJob(nodes=6, period=1200),
             ],
@@ -91,10 +80,10 @@ if __name__ == "__main__":
         ),
 
         Experiment(
-            '03-jacobi12-jacobi24-milc36',
+            '02-jacobi12-jacobi24-milc36',
             [
-                JacobiJob(nodes=12, iters=39, layout=(2, 3, 2), msg=50 * 1024, compute_delay=200),
-                JacobiJob(nodes=24, iters=10, layout=(4, 2, 3), msg=10 * 1024, compute_delay=500),
+                JacobiJob(nodes=12, iters=110, layout=(2, 3, 2), msg=50 * 1024, compute_delay=200),
+                JacobiJob(nodes=24, iters=200, layout=(4, 2, 3), msg=10 * 1024, compute_delay=500),
                 MilcJob(nodes=36, iters=120, layout=[2, 2, 3, 3], msg=486 * 1024, compute_delay=0.025),
             ],
             extraparams=['--extramem=1000000'],
@@ -102,17 +91,7 @@ if __name__ == "__main__":
         ),
 
         Experiment(
-            '04-milc36-jacobi36',
-            [
-                MilcJob(nodes=36, iters=120, layout=[2, 2, 3, 3], msg=486 * 1024, compute_delay=0.025),
-                JacobiJob(nodes=36, iters=10, layout=(4, 3, 3), msg=10 * 1024, compute_delay=500),
-            ],
-            extraparams=['--extramem=1000000'],
-            net_config_variations=net_config_variations,
-        ),
-
-        Experiment(
-            '05-jacobi36-milc24-lammps12',
+            '03-jacobi36-milc24-lammps12',
             [
                 JacobiJob(nodes=24, iters=39, layout=(4, 3, 2), msg=50 * 1024, compute_delay=200),
                 MilcJob(nodes=36, iters=120, layout=[2, 2, 3, 3], msg=486 * 1024, compute_delay=0.025),
@@ -123,21 +102,10 @@ if __name__ == "__main__":
         ),
 
         Experiment(
-            '06-jacobi24-milc48',
+            '04-jacobi24-milc24-ur6',
             [
-                JacobiJob(nodes=24, iters=150, layout=(4, 2, 3), msg=80 * 1024, compute_delay=200),
-                MilcJob(nodes=48, iters=100, layout=[2, 8, 3, 1], msg=400 * 1024, compute_delay=50),
-            ],
-            extraparams=['--extramem=1000000'],
-            net_config_variations=net_config_variations,
-        ),
-
-        Experiment(
-            '07-jacobi24-milc24-lammps18-ur6',
-            [
-                JacobiJob(nodes=24, iters=15, layout=(6, 2, 2), msg=200 * 1024, compute_delay=10),
+                JacobiJob(nodes=24, iters=25, layout=(6, 2, 2), msg=200 * 1024, compute_delay=10),
                 MilcJob(nodes=24, iters=150, layout=[3, 2, 2, 2], msg=150 * 1024, compute_delay=500),
-                LammpsJob(nodes=18, time_steps=4, replicas=(3, 3, 2)),
                 UrJob(nodes=6, period=1200),
             ],
             extraparams=['--extramem=1000000'],
@@ -145,35 +113,23 @@ if __name__ == "__main__":
         ),
 
         Experiment(
-            '08-milc20-lammps22-jacobi20-ur8',
+            '05-milc20-jacobi20-ur30',
             [
                 MilcJob(nodes=22, iters=100, layout=[2, 11, 1, 1], msg=400 * 1024, compute_delay=50),
-                LammpsJob(nodes=22, time_steps=5, replicas=(2, 11, 1)),
                 JacobiJob(nodes=20, iters=150, layout=(4, 5, 1), msg=80 * 1024, compute_delay=200),
-                UrJob(nodes=8, period=726.609003),
+                UrJob(nodes=30, period=726.609003),
             ],
             extraparams=['--extramem=1000000'],
             net_config_variations=net_config_variations,
         ),
 
         Experiment(
-            '09-jacobi20-milc24-lammps20-ur8',
+            '06-jacobi20-milc24-lammps20-ur8',
             [
                 JacobiJob(nodes=20, iters=2000, layout=(5, 2, 2), msg=60 * 1024, compute_delay=400),
                 MilcJob(nodes=24, iters=500, layout=[3, 2, 2, 2], msg=400 * 1024, compute_delay=300),
                 LammpsJob(nodes=20, time_steps=10, replicas=(4, 5, 1)),
                 UrJob(nodes=8, period=1000),
-            ],
-            extraparams=['--extramem=1000000'],
-            net_config_variations=net_config_variations,
-        ),
-
-        Experiment(
-            '10-jacobi20-milc22-ur8',
-            [
-                JacobiJob(nodes=20, iters=150, layout=(4, 5, 1), msg=80 * 1024, compute_delay=200),
-                MilcJob(nodes=22, iters=100, layout=[2, 11, 1, 1], msg=400 * 1024, compute_delay=50),
-                UrJob(nodes=8, period=726.609003),
             ],
             extraparams=['--extramem=1000000'],
             net_config_variations=net_config_variations,

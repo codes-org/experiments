@@ -9,7 +9,7 @@ Claude wrote most of this. I'm very grateful for it :)
 import os
 import sys
 from pathlib import Path
-from .utils.config_generator import ConfigGenerator, DFLY_72, DFLY_1056
+from .utils.config_generator import ConfigGenerator, DFLY_72, DFLY_1056, DFLY_8448
 from .utils.jobs import Experiment, JacobiJob, MilcJob, LammpsJob, UrJob
 from .utils.runner import TestRunner, Execute
 
@@ -19,8 +19,6 @@ this_script_dir: Path = Path(__file__).parent
 configs_path = os.environ.get('PATH_TO_SCRIPT_DIR', str(this_script_dir)) + '/conf'
 executable_path = os.environ['PATH_TO_CODES_BUILD'] + '/src/model-net-mpi-replay'
 exp_folder = Path.cwd()
-
-np = 3
 
 # This will affect all variables to replace in the templates
 template_vars = {
@@ -190,26 +188,104 @@ if __name__ == "__main__":
             net_config_variations=net_config_variations,
         ),
 
-        # Experiment 5: Scaled from 72 → 1052 nodes (preserves extreme imbalance patterns)
+        # Experiment 5: Scaled from 72 → 1056 nodes (preserves extreme imbalance patterns)
         Experiment(
-            '05-milc323-jacobi289-ur440',
+            '05-milc323-jacobi289-ur444',
             [
                 MilcJob(nodes=323, iters=100, layout=[1, 17, 1, 19], msg=400 * 1024, compute_delay=50),
                 JacobiJob(nodes=289, iters=150, layout=(1, 17, 17), msg=80 * 1024, compute_delay=200),
-                UrJob(nodes=440, period=726.609003),
+                UrJob(nodes=444, period=726.609003),
             ],
             extraparams=['--extramem=1000000'],
             net_config_variations=net_config_variations,
         ),
 
-        # Experiment 6: Scaled from 72 → 1040 nodes (preserves patterns, stays under limit)
+        # Experiment 6: Scaled from 72 → 1056 nodes (preserves patterns, stays under limit)
         Experiment(
-            '06-jacobi288-milc384-lammps280-ur88',
+            '06-jacobi288-milc384-lammps280-ur104',
             [
                 JacobiJob(nodes=288, iters=2000, layout=(12, 4, 6), msg=60 * 1024, compute_delay=400),
                 MilcJob(nodes=384, iters=500, layout=[4, 4, 4, 6], msg=400 * 1024, compute_delay=300),
                 LammpsJob(nodes=280, time_steps=10, replicas=(8, 5, 7)),
-                UrJob(nodes=88, period=1000),
+                UrJob(nodes=104, period=1000),
+            ],
+            extraparams=['--extramem=1000000'],
+            net_config_variations=net_config_variations,
+        ),
+    ]
+
+    # Define scaled-up experiments for 8448-node network
+    # Scaled to preserve communication patterns while maximizing network utilization
+    experiments_8448 = [
+        # Experiment 1: Scaled from 58 → 6800 nodes (preserves 80.6% utilization)
+        Experiment(
+            '01-jacobi1400-milc1200-milc3500-ur700',
+            [
+                JacobiJob(nodes=1400, iters=39, layout=(10, 10, 14), msg=50 * 1024, compute_delay=200),
+                MilcJob(nodes=1200, iters=30, layout=[5, 5, 6, 8], msg=480 * 1024, compute_delay=1500),
+                MilcJob(nodes=3500, iters=120, layout=[10, 14, 25], msg=10 * 1024, compute_delay=0.025),
+                UrJob(nodes=700, period=1200),
+            ],
+            extraparams=['--extramem=1000000'],
+            net_config_variations=net_config_variations,
+        ),
+
+        # Experiment 2: Scaled from 72 → 8400 nodes (preserves 1:2:3 ratio)
+        Experiment(
+            '02-jacobi1400-jacobi2800-milc4200',
+            [
+                JacobiJob(nodes=1400, iters=110, layout=(10, 10, 14), msg=50 * 1024, compute_delay=200),
+                JacobiJob(nodes=2800, iters=200, layout=(10, 14, 20), msg=10 * 1024, compute_delay=500),
+                MilcJob(nodes=4200, iters=120, layout=[6, 7, 10, 10], msg=486 * 1024, compute_delay=0.025),
+            ],
+            extraparams=['--extramem=1000000'],
+            net_config_variations=net_config_variations,
+        ),
+
+        # Experiment 3: Scaled from 72 → 8400 nodes (preserves 2:3:1 ratio)
+        Experiment(
+            '03-jacobi2800-milc4200-lammps1400',
+            [
+                JacobiJob(nodes=2800, iters=39, layout=(10, 14, 20), msg=50 * 1024, compute_delay=200),
+                MilcJob(nodes=4200, iters=120, layout=[6, 7, 10, 10], msg=486 * 1024, compute_delay=0.025),
+                LammpsJob(nodes=1400, time_steps=5, replicas=(10, 10, 14)),
+            ],
+            extraparams=['--extramem=1000000'],
+            net_config_variations=net_config_variations,
+        ),
+
+        # Experiment 4: Scaled from 54 → 6300 nodes (preserves 75% utilization)
+        Experiment(
+            '04-jacobi2800-milc2800-ur700',
+            [
+                JacobiJob(nodes=2800, iters=25, layout=(10, 14, 20), msg=200 * 1024, compute_delay=10),
+                MilcJob(nodes=2800, iters=150, layout=[5, 7, 8, 10], msg=150 * 1024, compute_delay=500),
+                UrJob(nodes=700, period=1200),
+            ],
+            extraparams=['--extramem=1000000'],
+            net_config_variations=net_config_variations,
+        ),
+
+        # Experiment 5: Scaled from 72 → 8448 nodes (preserves extreme imbalance patterns)
+        Experiment(
+            '05-milc2500-jacobi2300-ur3648',
+            [
+                MilcJob(nodes=2500, iters=100, layout=[1, 1, 25, 100], msg=400 * 1024, compute_delay=50),
+                JacobiJob(nodes=2300, iters=150, layout=(1, 23, 100), msg=80 * 1024, compute_delay=200),
+                UrJob(nodes=3648, period=726.609003),
+            ],
+            extraparams=['--extramem=1000000'],
+            net_config_variations=net_config_variations,
+        ),
+
+        # Experiment 6: Scaled from 72 → 8448 nodes (preserves patterns, challenges network)
+        Experiment(
+            '06-jacobi2300-milc2800-lammps2300-ur1048',
+            [
+                JacobiJob(nodes=2300, iters=2000, layout=(10, 10, 23), msg=60 * 1024, compute_delay=400),
+                MilcJob(nodes=2800, iters=500, layout=[5, 7, 8, 10], msg=400 * 1024, compute_delay=300),
+                LammpsJob(nodes=2300, time_steps=10, replicas=(23, 10, 10)),
+                UrJob(nodes=1048, period=1000),
             ],
             extraparams=['--extramem=1000000'],
             net_config_variations=net_config_variations,
@@ -217,6 +293,7 @@ if __name__ == "__main__":
     ]
 
     try:
+        np = 3
         # normal execution mode
         execute = Execute(
             binary_path=['mpirun', '-np', str(np), executable_path],
@@ -251,6 +328,14 @@ if __name__ == "__main__":
         config_generator_1056 = ConfigGenerator(configs_path, exp_folder, random_seed=seed, random_allocation=True, network_config=DFLY_1056)
         runner_1056 = TestRunner(template_vars, config_generator_1056, execute_with=execute)
         runner_1056.run_tests(experiments_1056)
+
+        # Run 8448-node experiments
+        print("=" * 60)
+        print("RUNNING 8448-NODE NETWORK EXPERIMENTS")
+        print("=" * 60)
+        config_generator_8448 = ConfigGenerator(configs_path, exp_folder, random_seed=seed, random_allocation=True, network_config=DFLY_8448)
+        runner_8448 = TestRunner(template_vars, config_generator_8448, execute_with=execute)
+        runner_8448.run_tests(experiments_8448)
     except KeyboardInterrupt:
         # This should be handled by the signal handler, but just in case
         print("\nScript interrupted by user", file=sys.stderr)

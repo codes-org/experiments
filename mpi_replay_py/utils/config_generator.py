@@ -37,6 +37,14 @@ DFLY_1056 = NetworkConfig(
     max_nodes=1056
 )
 
+DFLY_8448 = NetworkConfig(
+    name="dfly-8448",
+    config_dir="dfly-8448",
+    template_file="dfdally-8448-par.conf.in",
+    output_prefix="dfdally-8448-par",
+    max_nodes=8448
+)
+
 
 class ConfigGenerator:
     """Handles generation of configuration files for experiments."""

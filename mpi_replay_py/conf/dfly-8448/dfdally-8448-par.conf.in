@@ -45,9 +45,9 @@ PARAMS
 # number of global channels per router
    num_global_channels="2";
 # network config file for intra-group connections
-   intra-group-connections="${PATH_TO_CONNECTIONS}/dfdally-8k-intra";
+   intra-group-connections="${PATH_TO_CONNECTIONS}/dfdally-8448-intra";
 # network config file for inter-group connections
-   inter-group-connections="${PATH_TO_CONNECTIONS}/dfdally-8k-inter";
+   inter-group-connections="${PATH_TO_CONNECTIONS}/dfdally-8448-inter";
 # routing protocol to be used
    routing="prog-adaptive";
    minimal-bias="1";

@@ -57,7 +57,7 @@ class ConfigGenerator:
 
     def generate_base_config(self, experiment: Experiment, template_vars: dict[str, str]) -> Path:
         """Generate base configuration for an experiment."""
-        experiment.validate_jobs()
+        experiment.validate_jobs(self.network_config.max_nodes)
 
         exp_name = experiment.name
         jobs = experiment.jobs

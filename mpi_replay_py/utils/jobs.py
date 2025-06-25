@@ -254,14 +254,14 @@ class Experiment:
         """Get the total number of nodes needed for all jobs."""
         return sum(job.nodes for job in self.jobs)
 
-    def validate_jobs(self) -> None:
+    def validate_jobs(self, max_nodes: int) -> None:
         """Validate all jobs and check total node constraints."""
         for job in self.jobs:
             job.validate_layout()
 
         total_nodes = self.get_total_nodes()
-        if total_nodes > 72:
-            raise ValueError(f"Total nodes needed ({total_nodes}) exceeds available nodes (72)")
+        if total_nodes > max_nodes:
+            raise ValueError(f"Total nodes needed ({total_nodes}) exceeds available nodes ({max_nodes})")
 
     def get_jobs_by_type(self) -> dict[str, list[tuple[Job, str]]]:
         """Group jobs by type and assign suffixes for multiple instances."""

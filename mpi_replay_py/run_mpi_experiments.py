@@ -9,7 +9,7 @@ Claude wrote most of this. I'm very grateful for it :)
 import os
 import sys
 from pathlib import Path
-from .utils.config_generator import ConfigGenerator, DFLY_1056
+from .utils.config_generator import ConfigGenerator, DFLY_72, DFLY_1056
 from .utils.jobs import Experiment, JacobiJob, MilcJob, LammpsJob, UrJob
 from .utils.runner import TestRunner, Execute
 
@@ -47,19 +47,19 @@ if __name__ == "__main__":
 
     # Define simulation modes
     net_config_variations = {
-        #'high-fidelity': {
-        #    'NETWORK_SURR_ON': '0',
-        #    'APP_SURR_ON': '0'
-        #},
-        #'app-surrogate': {
-        #    'NETWORK_SURR_ON': '0',
-        #    'APP_SURR_ON': '1'
-        #},
-        #'app-and-network': {
-        #    'NETWORK_SURR_ON': '1',
-        #    'APP_SURR_ON': '1',
-        #    'NETWORK_MODE': 'nothing'
-        #},
+        'high-fidelity': {
+            'NETWORK_SURR_ON': '0',
+            'APP_SURR_ON': '0'
+        },
+        'app-surrogate': {
+            'NETWORK_SURR_ON': '0',
+            'APP_SURR_ON': '1'
+        },
+        'app-and-network': {
+            'NETWORK_SURR_ON': '1',
+            'APP_SURR_ON': '1',
+            'NETWORK_MODE': 'nothing'
+        },
         'app-and-network-freezing': {
             'NETWORK_SURR_ON': '1',
             'APP_SURR_ON': '1',
@@ -68,7 +68,7 @@ if __name__ == "__main__":
     }
 
     # Define test experiments using new Experiment and Job classes
-    experiments = [
+    experiments_72 = [
         Experiment(
             '01-jacobi12-milc10-milc30-ur6',
             [
@@ -138,6 +138,84 @@ if __name__ == "__main__":
         ),
     ]
 
+    # Define scaled-up experiments for 1056-node network
+    # Scaled to preserve communication patterns and network stress characteristics
+    experiments_1056 = [
+        # Experiment 1: Scaled from 58 → 862 nodes (preserves 80.6% utilization)
+        Experiment(
+            '01-jacobi175-milc144-milc455-ur88',
+            [
+                JacobiJob(nodes=175, iters=39, layout=(5, 7, 5), msg=50 * 1024, compute_delay=200),
+                MilcJob(nodes=144, iters=30, layout=[18, 8], msg=480 * 1024, compute_delay=1500),
+                MilcJob(nodes=455, iters=120, layout=[13, 5, 7], msg=10 * 1024, compute_delay=0.025),
+                UrJob(nodes=88, period=1200),
+            ],
+            extraparams=['--extramem=1000000'],
+            net_config_variations=net_config_variations,
+        ),
+
+        # Experiment 2: Scaled from 72 → 1050 nodes (preserves 1:2:3 ratio)
+        Experiment(
+            '02-jacobi175-jacobi350-milc525',
+            [
+                JacobiJob(nodes=175, iters=110, layout=(5, 7, 5), msg=50 * 1024, compute_delay=200),
+                JacobiJob(nodes=350, iters=200, layout=(10, 5, 7), msg=10 * 1024, compute_delay=500),
+                MilcJob(nodes=525, iters=120, layout=[3, 5, 5, 7], msg=486 * 1024, compute_delay=0.025),
+            ],
+            extraparams=['--extramem=1000000'],
+            net_config_variations=net_config_variations,
+        ),
+
+        # Experiment 3: Scaled from 72 → 960 nodes (preserves 2:3:1 ratio)
+        Experiment(
+            '03-jacobi320-milc480-lammps160',
+            [
+                JacobiJob(nodes=320, iters=39, layout=(8, 5, 8), msg=50 * 1024, compute_delay=200),
+                MilcJob(nodes=480, iters=120, layout=[4, 4, 5, 6], msg=486 * 1024, compute_delay=0.025),
+                LammpsJob(nodes=160, time_steps=5, replicas=(5, 8, 4)),
+            ],
+            extraparams=['--extramem=1000000'],
+            net_config_variations=net_config_variations,
+        ),
+
+        # Experiment 4: Scaled from 54 → 808 nodes (preserves 75% utilization)
+        Experiment(
+            '04-jacobi336-milc384-ur88',
+            [
+                JacobiJob(nodes=336, iters=25, layout=(12, 4, 7), msg=200 * 1024, compute_delay=10),
+                MilcJob(nodes=384, iters=150, layout=[4, 4, 4, 6], msg=150 * 1024, compute_delay=500),
+                UrJob(nodes=88, period=1200),
+            ],
+            extraparams=['--extramem=1000000'],
+            net_config_variations=net_config_variations,
+        ),
+
+        # Experiment 5: Scaled from 72 → 1052 nodes (preserves extreme imbalance patterns)
+        Experiment(
+            '05-milc323-jacobi289-ur440',
+            [
+                MilcJob(nodes=323, iters=100, layout=[1, 17, 1, 19], msg=400 * 1024, compute_delay=50),
+                JacobiJob(nodes=289, iters=150, layout=(1, 17, 17), msg=80 * 1024, compute_delay=200),
+                UrJob(nodes=440, period=726.609003),
+            ],
+            extraparams=['--extramem=1000000'],
+            net_config_variations=net_config_variations,
+        ),
+
+        # Experiment 6: Scaled from 72 → 1040 nodes (preserves patterns, stays under limit)
+        Experiment(
+            '06-jacobi288-milc384-lammps280-ur88',
+            [
+                JacobiJob(nodes=288, iters=2000, layout=(12, 4, 6), msg=60 * 1024, compute_delay=400),
+                MilcJob(nodes=384, iters=500, layout=[4, 4, 4, 6], msg=400 * 1024, compute_delay=300),
+                LammpsJob(nodes=280, time_steps=10, replicas=(8, 5, 7)),
+                UrJob(nodes=88, period=1000),
+            ],
+            extraparams=['--extramem=1000000'],
+            net_config_variations=net_config_variations,
+        ),
+    ]
+
     try:
         # normal execution mode
         execute = Execute(
@@ -158,9 +236,21 @@ if __name__ == "__main__":
         #    redirect_output=False,
         #)
 
-        config_generator = ConfigGenerator(configs_path, exp_folder, random_seed=seed, random_allocation=True, network_config=DFLY_1056)
-        runner = TestRunner(template_vars, config_generator, execute_with=execute)
-        runner.run_tests(experiments)
+        # Run 72-node experiments
+        print("=" * 60)
+        print("RUNNING 72-NODE NETWORK EXPERIMENTS")
+        print("=" * 60)
+        config_generator_72 = ConfigGenerator(configs_path, exp_folder, random_seed=seed, random_allocation=True, network_config=DFLY_72)
+        runner_72 = TestRunner(template_vars, config_generator_72, execute_with=execute)
+        runner_72.run_tests(experiments_72)
+
+        # Run 1056-node experiments
+        print("=" * 60)
+        print("RUNNING 1056-NODE NETWORK EXPERIMENTS")
+        print("=" * 60)
+        config_generator_1056 = ConfigGenerator(configs_path, exp_folder, random_seed=seed, random_allocation=True, network_config=DFLY_1056)
+        runner_1056 = TestRunner(template_vars, config_generator_1056, execute_with=execute)
+        runner_1056.run_tests(experiments_1056)
     except KeyboardInterrupt:
         # This should be handled by the signal handler, but just in case
         print("\nScript interrupted by user", file=sys.stderr)

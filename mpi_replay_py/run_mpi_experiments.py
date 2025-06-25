@@ -9,9 +9,9 @@ Claude wrote most of this. I'm very grateful for it :)
 import os
 import sys
 from pathlib import Path
-from .config_generator import ConfigGenerator
-from .jobs import Experiment, JacobiJob, MilcJob, LammpsJob, UrJob
-from .runner import TestRunner, Execute
+from .utils.config_generator import ConfigGenerator
+from .utils.jobs import Experiment, JacobiJob, MilcJob, LammpsJob, UrJob
+from .utils.runner import TestRunner, Execute
 
 seed = 14829 # Same seed makes the simulation deterministic
 scripts_root_dir = os.environ['SCRIPTS_ROOT_DIR']
@@ -45,19 +45,19 @@ if __name__ == "__main__":
 
     # Define simulation modes
     net_config_variations = {
-        'high-fidelity': {
-            'NETWORK_SURR_ON': '0',
-            'APP_SURR_ON': '0'
-        },
-        'app-surrogate': {
-            'NETWORK_SURR_ON': '0',
-            'APP_SURR_ON': '1'
-        },
-        'app-and-network': {
-            'NETWORK_SURR_ON': '1',
-            'APP_SURR_ON': '1',
-            'NETWORK_MODE': 'nothing'
-        },
+        #'high-fidelity': {
+        #    'NETWORK_SURR_ON': '0',
+        #    'APP_SURR_ON': '0'
+        #},
+        #'app-surrogate': {
+        #    'NETWORK_SURR_ON': '0',
+        #    'APP_SURR_ON': '1'
+        #},
+        #'app-and-network': {
+        #    'NETWORK_SURR_ON': '1',
+        #    'APP_SURR_ON': '1',
+        #    'NETWORK_MODE': 'nothing'
+        #},
         'app-and-network-freezing': {
             'NETWORK_SURR_ON': '1',
             'APP_SURR_ON': '1',

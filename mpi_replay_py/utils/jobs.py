@@ -9,13 +9,10 @@ import warnings
 from collections import defaultdict
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import override, ClassVar, TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from pathlib import Path
+from typing import override, ClassVar
 
 
-def _initialize_key_name(instance: Job, job_class: type, default_base_name: str) -> None:
+def _initialize_key_name(instance: Job, job_class: type, default_base_name: str) -> str:
     """Shared key_name initialization logic for all job types"""
     if instance.key_name is None:
         # Auto-generate key name
@@ -35,6 +32,7 @@ def _initialize_key_name(instance: Job, job_class: type, default_base_name: str)
         )
 
     job_class._used_key_names.add(instance.key_name)
+    return instance.key_name
 
 
 class Job(ABC):
@@ -60,20 +58,6 @@ class Job(ABC):
         """Format line for workloads-settings.conf"""
         return f'{self.nodes} {job_name} 1 0'
 
-    def has_config_file(self) -> bool:
-        """Whether this job type generates a config file"""
-        return self.config_filename is not None
-
-    def format_workloads_json(self, job_name: str, exp_config_dir: Path, suffix: str = "") -> str | None:
-        """Format line for workloads-json.conf, or None to skip"""
-        if not self.has_config_file():
-            return None
-        config_filename = self.config_filename
-        if config_filename is None:
-            return None
-        config_file = config_filename.format(suffix=f"-{suffix}" if suffix else "")
-        return f'{job_name} {exp_config_dir}/{config_file}'
-
 
 @dataclass
 class JacobiJob(Job):
@@ -89,10 +73,10 @@ class JacobiJob(Job):
     _used_key_names: ClassVar[set[str]] = set()
 
     def __post_init__(self):
-        _initialize_key_name(self, JacobiJob, "jacobi3d")
-        self.job_id: str = 'conceptual-jacobi3d'
+        key_name = _initialize_key_name(self, JacobiJob, "jacobi3d")
+        self.job_id: str = f'conceptual-{key_name}'
         self.template_path: str | None = 'conceptual.json'
-        self.config_filename: str | None = 'conceptual{suffix}.json'
+        self.config_filename: str | None = f'conceptual-{key_name}.json'
         self.description: str = f"Jacobi: {self.iters} iters, {self.msg}B msgs, {self.nodes} nodes, {self.compute_delay}μs delay"
 
     @classmethod
@@ -101,15 +85,15 @@ class JacobiJob(Job):
         cls._instance_counter = 0
         cls._used_key_names.clear()
 
-
     @property
     @override
     def template_vars(self) -> dict[str, str]:
         proc_x, proc_y, proc_z = self.layout
         jacobi_compute_delay = int(self.compute_delay * 1e3)
+        assert self.key_name is not None, "key_name should have been set up by __post_init__, something went wrong!"
 
         return {
-            'JACOBI_KEY_NAME': self.key_name or 'jacobi3d',  # Ensure never None
+            'JACOBI_KEY_NAME': self.key_name,
             'JACOBI_GRID_X': str(proc_x * 100),
             'JACOBI_GRID_Y': str(proc_y * 100),
             'JACOBI_GRID_Z': str(proc_z * 100),
@@ -143,10 +127,10 @@ class MilcJob(Job):
     _used_key_names: ClassVar[set[str]] = set()
 
     def __post_init__(self):
-        _initialize_key_name(self, MilcJob, "milc")
-        self.job_id: str = 'milc'
+        key_name = _initialize_key_name(self, MilcJob, "milc")
+        self.job_id: str = key_name
         self.template_path: str | None = 'milc_skeleton.json'
-        self.config_filename: str | None = 'milc{suffix}_skeleton.json'
+        self.config_filename: str | None = f'{key_name}_skeleton.json'
         self.description: str = f"MILC: {self.iters} iters, {self.msg}B msgs, {self.nodes} nodes, {self.compute_delay}μs delay"
 
     @classmethod
@@ -154,7 +138,6 @@ class MilcJob(Job):
         """Reset counters for testing purposes"""
         cls._instance_counter = 0
         cls._used_key_names.clear()
-
 
     @property
     @override
@@ -193,10 +176,10 @@ class LammpsJob(Job):
     _used_key_names: ClassVar[set[str]] = set()
 
     def __post_init__(self):
-        _initialize_key_name(self, LammpsJob, "lammps")
-        self.job_id: str = 'lammps'
+        key_name = _initialize_key_name(self, LammpsJob, "lammps")
+        self.job_id: str = key_name
         self.template_path: str | None = 'lammps_workload.json'
-        self.config_filename: str | None = 'lammps{suffix}_workload.json'
+        self.config_filename: str | None = f'{key_name}_workload.json'
         self.description: str = f"LAMMPS: {self.nodes} nodes, {self.time_steps} time steps"
 
     @classmethod
@@ -204,7 +187,6 @@ class LammpsJob(Job):
         """Reset counters for testing purposes"""
         cls._instance_counter = 0
         cls._used_key_names.clear()
-
 
     @property
     @override
@@ -234,30 +216,17 @@ class UrJob(Job):
     period: float
     key_name: str | None = None  # Optional override
 
-    _instance_counter: ClassVar[int] = 0
-    _used_key_names: ClassVar[set[str]] = set()
-
     def __post_init__(self):
-        _initialize_key_name(self, UrJob, "synthetic1")
+        self.key_name = "synthetic1"
         self.job_id: str = 'synthetic1'
         self.template_path: str | None = None
         self.config_filename: str | None = None
         self.description: str = f"UR: {self.nodes} nodes, {self.period}ns period"
 
-    @classmethod
-    def reset_counters(cls):
-        """Reset counters for testing purposes"""
-        cls._instance_counter = 0
-        cls._used_key_names.clear()
-
-
     @property
     @override
     def template_vars(self) -> dict[str, str]:
-        return {
-            'UR_NODES': str(self.nodes),
-            'UR_PERIOD': str(self.period),
-        }
+        return {}
 
     @override
     def validate_layout(self) -> None:
@@ -317,4 +286,3 @@ def reset_all_job_counters():
     JacobiJob.reset_counters()
     MilcJob.reset_counters()
     LammpsJob.reset_counters()
-    UrJob.reset_counters()

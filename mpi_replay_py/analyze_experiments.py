@@ -170,7 +170,7 @@ def main():
         "03-jacobi36-milc24-lammps12": ["Jacobi", "MILC", "LAMMPS"],
         "04-jacobi24-milc24-ur6": ["Jacobi", "MILC", "UR"],
         "05-milc20-jacobi20-ur30": ["MILC", "Jacobi", "UR"],
-        #"06-jacobi20-milc24-lammps20-ur8": ["Jacobi", "MILC", "LAMMPS", "UR"],
+        "06-jacobi20-milc24-lammps20-ur8": ["Jacobi", "MILC", "LAMMPS", "UR"],
     }
     
     # Extract all data

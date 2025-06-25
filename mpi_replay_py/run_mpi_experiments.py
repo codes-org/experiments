@@ -8,6 +8,7 @@ Claude wrote most of this. I'm very grateful for it :)
 
 import os
 import sys
+import json
 from pathlib import Path
 from .utils.config_generator import ConfigGenerator, DFLY_72, DFLY_1056, DFLY_8448
 from .utils.jobs import Experiment, JacobiJob, MilcJob, LammpsJob, UrJob
@@ -32,7 +33,7 @@ template_vars = {
     'APP_DIRECTOR_MODE': 'every-n-nanoseconds', # options: 'every-n-gvt' (non-deterministic switch) and 'every-n-nanoseconds' (deterministic switch)
     'EVERY_N_GVTS': '1500',
     'EVERY_NSECS': '1.0e6',
-    'ITERS_TO_COLLECT': '2',
+    'ITERS_TO_COLLECT': '3',
     # Other parameters, not needed right now
     'PACKET_LATENCY_TRACE_PATH': '',
     'BUFFER_SNAPSHOTS': '',
@@ -40,6 +41,20 @@ template_vars = {
     # Options in other files than dfly-*.conf files
     'CPU_FREQ': '4e9',  # in Hz
 }
+
+def export_experiment_metadata(experiments_list: list[Experiment], output_path: Path):
+    """Export experiment job types to JSON file"""
+    metadata = {}
+
+    for exp in experiments_list:
+        job_types: list[str] = [job.__class__.__name__.replace("Job", "") for job in exp.jobs]
+        metadata[exp.name] = job_types
+
+    metadata_file = os.path.join(output_path, "experiment_metadata.json")
+    with open(metadata_file, 'w') as f:
+        json.dump(metadata, f, indent=2)
+
+    return metadata_file
 
 if __name__ == "__main__":
 
@@ -293,8 +308,11 @@ if __name__ == "__main__":
     ]
 
     try:
+        _ = export_experiment_metadata(experiments_72 + experiments_1056 + experiments_8448, exp_folder)
+
         # ideal np = 9 for 72 nodes, and np = 33 for 1056 and 8448 nodes
         np = 3
+
         # normal execution mode
         execute = Execute(
             binary_path=['mpirun', '-np', str(np), executable_path],

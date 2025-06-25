@@ -22,16 +22,20 @@ EXPERIMENTS_PATH="$(dirname -- "$EXPERIMENT_SCRIPT")/results"
 PATH_TO_SCRIPT_DIR="$(realpath "$(dirname "$EXPERIMENT_SCRIPT")")"
 
 # Creating new sub-folder to hold current experiment
+mkdir -p "$EXPERIMENTS_PATH" || exit 1
+
+# Find highest experiment number
+max_num=0
 if [ -d "$EXPERIMENTS_PATH" ]; then
-  # Find latest experiment number
-  last="$(ls -1 "$EXPERIMENTS_PATH" | grep exp- | sort | tail -n 1)"
-  last_index=${last/exp-}
-  last_index=${last_index%/}
-  # new folder name
-  expfolder="$EXPERIMENTS_PATH/exp-$( printf %03d $(( 10#$last_index + 1 )) )"
-else
-  expfolder="$EXPERIMENTS_PATH/exp-001"
+  max_num=$(find "$EXPERIMENTS_PATH" -maxdepth 1 -type d -name "exp-[0-9][0-9][0-9]*" -printf "%f\n" 2>/dev/null | \
+    sed -n 's/^exp-\([0-9]\{3\}\).*/\1/p' | \
+    awk 'BEGIN{max=0} {num=int($0); if(num>max) max=num} END{print max}')
+  max_num=${max_num:-0}
 fi
+
+# Create new experiment folder
+next_num=$((max_num + 1))
+expfolder="$EXPERIMENTS_PATH/exp-$(printf "%03d" $next_num)"
 
 mkdir -p "$expfolder" || exit 1
 

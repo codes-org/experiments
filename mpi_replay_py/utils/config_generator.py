@@ -7,16 +7,53 @@ import random
 from pathlib import Path
 from string import Template
 from .jobs import Experiment, Job
+from dataclasses import dataclass
+
+
+@dataclass
+class NetworkConfig:
+    """Configuration for a network topology."""
+    name: str
+    config_dir: str
+    template_file: str
+    output_prefix: str
+    max_nodes: int
+
+
+# Predefined network configurations
+DFLY_72 = NetworkConfig(
+    name="dfly-72",
+    config_dir="dfly-72",
+    template_file="dfdally-72-par.conf.in",
+    output_prefix="dfdally-72-par",
+    max_nodes=72
+)
+
+DFLY_1056 = NetworkConfig(
+    name="dfly-1056",
+    config_dir="dfly-1056",
+    template_file="dfdally-1056-par.conf.in",
+    output_prefix="dfdally-1056-par",
+    max_nodes=1056
+)
 
 
 class ConfigGenerator:
     """Handles generation of configuration files for experiments."""
 
-    def __init__(self, configs_path: str, exp_folder: Path, random_seed: int | None = None, random_allocation: bool = True):
+    def __init__(
+        self,
+        configs_path: str,
+        exp_folder: Path,
+        random_seed: int | None = None,
+        random_allocation: bool = True,
+        network_config: NetworkConfig = DFLY_72,
+    ):
         self.configs_path: str = configs_path
         self.exp_folder: Path = exp_folder
         self.random_seed: int | None = random_seed
         self.random_allocation: bool = random_allocation
+        self.network_config: NetworkConfig = network_config
 
     def generate_base_config(self, experiment: Experiment, template_vars: dict[str, str]) -> Path:
         """Generate base configuration for an experiment."""
@@ -80,17 +117,18 @@ class ConfigGenerator:
         lines: list[str] = []
 
         total_needed = sum(job.nodes for job in jobs)
+        if total_needed > self.network_config.max_nodes:
+            raise ValueError(f"Total nodes required ({total_needed}) exceeds network capacity ({self.network_config.max_nodes})")
 
+        all_nodes = list(range(self.network_config.max_nodes))
         if self.random_allocation:
-            prev_state = None
             if self.random_seed is not None:
                 prev_state = random.getstate()
                 random.seed(self.random_seed)
-            all_nodes = random.sample(range(72), total_needed)
-            if self.random_seed is not None and prev_state:
+                random.shuffle(all_nodes)
                 random.setstate(prev_state)
-        else:
-            all_nodes = list(range(72))
+            else:
+                random.shuffle(all_nodes)
 
         # Generate allocation lines in the same order as workloads-settings.conf
         idx = 0
@@ -125,15 +163,15 @@ class ConfigGenerator:
             _ = f.write(substituted_content)
 
     def generate_network_config(self, exp_config_dir: Path, variation_name: str, template_vars: dict[str, str]) -> Path:
-        dst_file = f'dfdally-72-par-{variation_name}.conf'
+        dst_file = f'{self.network_config.output_prefix}-{variation_name}.conf'
 
         # Add experiment-specific variables
         template_vars = template_vars | {
-            'CURRENT_EXP_NAME': exp_config_dir.name,
             'CURRENT_EXP_DIR': str(exp_config_dir),
+            'PATH_TO_CONNECTIONS': f'{self.configs_path}/{self.network_config.config_dir}',
         }
 
-        src_path = Path(self.configs_path) / 'dfdally-72-par.conf.in'
+        src_path = Path(self.configs_path) / self.network_config.config_dir / self.network_config.template_file
         dst_path = exp_config_dir / dst_file
         self.process_template(src_path, dst_path, template_vars)
         return dst_path

@@ -9,7 +9,7 @@ Claude wrote most of this. I'm very grateful for it :)
 import os
 import sys
 from pathlib import Path
-from .utils.config_generator import ConfigGenerator
+from .utils.config_generator import ConfigGenerator, DFLY_1056
 from .utils.jobs import Experiment, JacobiJob, MilcJob, LammpsJob, UrJob
 from .utils.runner import TestRunner, Execute
 
@@ -24,21 +24,23 @@ np = 3
 
 # This will affect all variables to replace in the templates
 template_vars = {
-    # System variables
-    'CPU_FREQ': str(4e9),  # in Hz
-    'SCRIPTS_ROOT_DIR': scripts_root_dir,
-    'PATH_TO_CODES_BUILD': os.environ['PATH_TO_CODES_BUILD'],
-
-    # Template variables
-    'PATH_TO_CONNECTIONS': configs_path,
+    # Network configuration
+    'PACKET_SIZE': '4096',
+    'CHUNK_SIZE': '4096',
+    # Surrogate configuration
     'NETWORK_SURR_ON': '0',
     'NETWORK_MODE': 'nothing',
     'APP_SURR_ON': '0',
-    # options: 'every-n-gvt' (non-deterministic switch) and 'every-n-nanoseconds' (deterministic switch)
-    'APP_DIRECTOR_MODE': 'every-n-nanoseconds',
+    'APP_DIRECTOR_MODE': 'every-n-nanoseconds', # options: 'every-n-gvt' (non-deterministic switch) and 'every-n-nanoseconds' (deterministic switch)
     'EVERY_N_GVTS': '1500',
     'EVERY_NSECS': '1.0e6',
-    'ITERS_TO_COLLECT': '2'
+    'ITERS_TO_COLLECT': '2',
+    # Other parameters, not needed right now
+    'PACKET_LATENCY_TRACE_PATH': '',
+    'BUFFER_SNAPSHOTS': '',
+
+    # Options in other files than dfly-*.conf files
+    'CPU_FREQ': '4e9',  # in Hz
 }
 
 if __name__ == "__main__":
@@ -156,7 +158,7 @@ if __name__ == "__main__":
         #    redirect_output=False,
         #)
 
-        config_generator = ConfigGenerator(configs_path, exp_folder, random_seed=seed, random_allocation=True)
+        config_generator = ConfigGenerator(configs_path, exp_folder, random_seed=seed, random_allocation=True, network_config=DFLY_1056)
         runner = TestRunner(template_vars, config_generator, execute_with=execute)
         runner.run_tests(experiments)
     except KeyboardInterrupt:

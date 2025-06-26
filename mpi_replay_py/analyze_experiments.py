@@ -7,6 +7,7 @@ import re
 import json
 import pandas as pd
 from pathlib import Path
+import sys
 from typing import Any
 
 # Global configuration variables
@@ -171,11 +172,9 @@ def calculate_speedups_and_errors(results: list[dict[str, Any]]) -> tuple[list[d
 
     return speedup_data, error_data
 
-def main() -> None:
+def main(base_path: Path, save_csv: bool = False) -> None:
     print("Analyzing CODES experiment results")
     print("=" * 50)
-
-    base_path = Path("/home/helq/Research/HPC/code/kronos/2024-feb-22/experiments/mpi_replay_py/results/exp-225-ghc-1056-8448/")
 
     # Load job info from metadata file
     job_info = load_experiment_metadata(base_path)
@@ -195,14 +194,20 @@ def main() -> None:
     print("=" * 50)
     if not speedup_df.empty:
         # Pivot table for better readability
-        speedup_pivot = speedup_df.pivot(index='Experiment', columns='Mode', values='Speedup')
+        speedup_pivot = speedup_df.pivot(
+                index='Experiment',
+                columns='Mode',
+                values='Speedup'
+        ).reindex(columns=SURROGATE_MODES)
         print(speedup_pivot.round(2))
 
         print(f"\nAverage speedups across all experiments:")
         for mode in SURROGATE_MODES:
+            speedup_pivot_fair = speedup_pivot.dropna()
             if mode in speedup_pivot.columns:
                 avg_speedup = speedup_pivot[mode].mean()
-                print(f"  {mode}: {avg_speedup:.2f}×")
+                avg_speedup_fair = speedup_pivot_fair[mode].mean()
+                print(f"  {mode}: {avg_speedup:.2f}×  ({avg_speedup_fair:.2f}× ignoring any experiments with NaN)")
     else:
         print("No speedup data available")
 
@@ -214,7 +219,7 @@ def main() -> None:
             index=['Experiment', 'Application'],
             columns='Mode',
             values='Error_Percent'
-        )
+        ).reindex(columns=SURROGATE_MODES)
         print(error_pivot.round(2))
 
         print(f"\nAverage absolute errors across all experiments:")
@@ -226,15 +231,16 @@ def main() -> None:
         print("No error data available")
 
     # Save detailed results to CSV
-    print(f"\n💾 SAVING DETAILED RESULTS")
-    print("=" * 50)
+    if save_csv:
+        print(f"\n💾 SAVING DETAILED RESULTS")
+        print("=" * 50)
 
-    speedup_df.to_csv('speedup_results.csv', index=False)
-    error_df.to_csv('error_results.csv', index=False)
+        speedup_df.to_csv('speedup_results.csv', index=False)
+        error_df.to_csv('error_results.csv', index=False)
 
-    print("Saved detailed results to:")
-    print("  - speedup_results.csv")
-    print("  - error_results.csv")
+        print("Saved detailed results to:")
+        print("  - speedup_results.csv")
+        print("  - error_results.csv")
 
     # Summary statistics
     print(f"\n📈 SUMMARY STATISTICS")
@@ -255,4 +261,7 @@ def main() -> None:
         print(f"Results with <5% error: {low_error_count}/{total_error_count} ({low_error_count/total_error_count*100:.1f}%)")
 
 if __name__ == "__main__":
-    main()
+    base_path = Path("results/exp-225-ghc-iter=2/")
+    if len(sys.argv) > 1:
+        base_path = Path(sys.argv[1])
+    main(base_path)

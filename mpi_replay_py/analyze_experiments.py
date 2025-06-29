@@ -33,40 +33,36 @@ def load_experiment_metadata(base_path: Path) -> dict[str, list[str]]:
         print(f"Error parsing metadata file: {e}")
         return {}
 
-def extract_simulation_runtime(model_result_path: Path) -> float | None:
-    """Extract the simulation runtime from model-result.txt"""
-    try:
-        with open(model_result_path, 'r') as f:
-            content = f.read()
-
-        # Look for "Running Time = X.XXXX seconds"
-        match = re.search(r'Running Time = ([\d.]+) seconds', content)
-        if match:
-            return float(match.group(1))
-        else:
-            print(f"Warning: Could not find running time in {model_result_path}")
-            return None
-    except Exception as e:
-        print(f"Error reading {model_result_path}: {e}")
+def extract_simulation_runtime(content: str, model_result_path: Path) -> float | None:
+    """Extract the simulation runtime from model-result.txt content"""
+    # Look for "Running Time = X.XXXX seconds"
+    match = re.search(r'Running Time = ([\d.]+) seconds', content)
+    if match:
+        return float(match.group(1))
+    else:
+        print(f"Warning: Could not find running time in {model_result_path}")
         return None
 
-def extract_app_completion_times(model_result_path: Path) -> dict[int, float]:
-    """Extract application completion times from model-result.txt"""
-    try:
-        with open(model_result_path, 'r') as f:
-            content = f.read()
+def extract_app_completion_times(content: str) -> dict[int, float]:
+    """Extract application completion times from model-result.txt content"""
+    # Look for all "App X: XXXXX.XXXX" patterns
+    app_matches = re.findall(r'App (\d+): ([\d.]+)', content)
 
-        # Look for all "App X: XXXXX.XXXX" patterns
-        app_matches = re.findall(r'App (\d+): ([\d.]+)', content)
+    app_times: dict[int, float] = {}
+    for app_id, time_str in app_matches:  # type: ignore[misc]
+        app_times[int(app_id)] = float(time_str)
 
-        app_times: dict[int, float] = {}
-        for app_id, time_str in app_matches:  # type: ignore[misc]
-            app_times[int(app_id)] = float(time_str)
+    return app_times
 
-        return app_times
-    except Exception as e:
-        print(f"Error reading {model_result_path}: {e}")
-        return {}
+def extract_net_events_processed(content: str, model_result_path: Path) -> int | None:
+    """Extract the net events processed from model-result.txt content"""
+    # Look for "Net Events Processed                                XXXXXXXX"
+    match = re.search(r'Net Events Processed\s+(\d+)', content)
+    if match:
+        return int(match.group(1))
+    else:
+        print(f"Warning: Could not find net events processed in {model_result_path}")
+        return None
 
 def analyze_all_experiments(base_path: Path, job_info: dict[str, list[str]]) -> list[dict[str, str | list[str] | dict[str, float | dict[int, float] | None]]]:
     """Analyze all experiments and return structured data"""
@@ -95,14 +91,27 @@ def analyze_all_experiments(base_path: Path, job_info: dict[str, list[str]]) -> 
                 print(f"Warning: {mode} not found for {exp}")
                 continue
 
-            # Extract data
-            runtime = extract_simulation_runtime(mode_path)
-            app_times = extract_app_completion_times(mode_path)
+            # Read file once and extract all data
+            try:
+                with open(mode_path, 'r') as f:
+                    content = f.read()
+                
+                runtime = extract_simulation_runtime(content, mode_path)
+                app_times = extract_app_completion_times(content)
+                net_events = extract_net_events_processed(content, mode_path)
 
-            exp_data[mode] = {
-                'runtime': runtime,
-                'app_times': app_times
-            }
+                exp_data[mode] = {
+                    'runtime': runtime,
+                    'app_times': app_times,
+                    'net_events': net_events
+                }
+            except Exception as e:
+                print(f"Error reading {mode_path}: {e}")
+                exp_data[mode] = {
+                    'runtime': None,
+                    'app_times': {},
+                    'net_events': None
+                }
 
         results.append({
             'experiment': exp,
@@ -112,11 +121,12 @@ def analyze_all_experiments(base_path: Path, job_info: dict[str, list[str]]) -> 
 
     return results
 
-def calculate_speedups_and_errors(results: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Calculate speedups and application completion errors"""
+def calculate_speedups_and_errors(results: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    """Calculate speedups, application completion errors, and event metrics"""
 
     speedup_data = []
     error_data = []
+    dashboard_data = []
 
     for result in results:
         exp_name = result['experiment']
@@ -129,6 +139,7 @@ def calculate_speedups_and_errors(results: list[dict[str, Any]]) -> tuple[list[d
 
         hf_runtime = data['high-fidelity']['runtime']
         hf_app_times = data['high-fidelity']['app_times']
+        hf_net_events = data['high-fidelity']['net_events']
 
         for mode in SURROGATE_MODES:
             if mode not in data:
@@ -137,6 +148,7 @@ def calculate_speedups_and_errors(results: list[dict[str, Any]]) -> tuple[list[d
             mode_data = data[mode]
 
             # Calculate speedup
+            speedup = None
             if hf_runtime and mode_data['runtime']:
                 speedup = hf_runtime / mode_data['runtime']
                 speedup_data.append({
@@ -147,7 +159,16 @@ def calculate_speedups_and_errors(results: list[dict[str, Any]]) -> tuple[list[d
                     'Speedup': speedup
                 })
 
-            # Calculate application completion errors
+            # Calculate event metrics
+            events_skipped_pct = None
+            theoretical_speedup = None
+            if hf_net_events and mode_data['net_events']:
+                event_ratio = mode_data['net_events'] / hf_net_events
+                events_skipped_pct = (1 - event_ratio) * 100
+                theoretical_speedup = 1 / event_ratio
+
+            # Calculate application completion errors and collect for dashboard
+            app_errors = []
             for app_id in hf_app_times.keys():
                 if app_id in mode_data['app_times']:
                     hf_time = hf_app_times[app_id]
@@ -155,6 +176,7 @@ def calculate_speedups_and_errors(results: list[dict[str, Any]]) -> tuple[list[d
 
                     if hf_time and mode_time:
                         error = ((mode_time - hf_time) / hf_time) * 100
+                        app_errors.append(abs(error))
 
                         # Get application name
                         app_name = f"App {app_id}"
@@ -170,7 +192,32 @@ def calculate_speedups_and_errors(results: list[dict[str, Any]]) -> tuple[list[d
                             'Error_Percent': error
                         })
 
-    return speedup_data, error_data
+            # Calculate dashboard metrics
+            if app_errors:
+                min_error = min(app_errors)
+                max_error = max(app_errors)
+                apps_above_5pct = sum(1 for err in app_errors if err > 5.0)
+                total_apps = len(app_errors)
+                
+                # Calculate efficiency
+                efficiency = None
+                if speedup and theoretical_speedup:
+                    efficiency = speedup / theoretical_speedup
+
+                dashboard_data.append({
+                    'Experiment': exp_name,
+                    'Mode': mode,
+                    'Speedup': speedup,
+                    'Events_Skipped_Pct': events_skipped_pct,
+                    'Theoretical_Speedup': theoretical_speedup,
+                    'Efficiency': efficiency,
+                    'Min_Error_Pct': min_error,
+                    'Max_Error_Pct': max_error,
+                    'Apps_Above_5pct': apps_above_5pct,
+                    'Total_Apps': total_apps
+                })
+
+    return speedup_data, error_data, dashboard_data
 
 def main(base_path: Path, save_csv: bool = False) -> None:
     print("Analyzing CODES experiment results")
@@ -183,35 +230,47 @@ def main(base_path: Path, save_csv: bool = False) -> None:
     results = analyze_all_experiments(base_path, job_info)
 
     # Calculate speedups and errors
-    speedup_data, error_data = calculate_speedups_and_errors(results)
+    speedup_data, error_data, dashboard_data = calculate_speedups_and_errors(results)
 
     # Create DataFrames
     speedup_df = pd.DataFrame(speedup_data)
     error_df = pd.DataFrame(error_data)
+    dashboard_df = pd.DataFrame(dashboard_data)
 
-    # Display results
-    print("\n📊 SIMULATION RUNTIME SPEEDUPS")
-    print("=" * 50)
-    if not speedup_df.empty:
-        # Pivot table for better readability
-        speedup_pivot = speedup_df.pivot(
-                index='Experiment',
-                columns='Mode',
-                values='Speedup'
-        ).reindex(columns=SURROGATE_MODES)
-        print(speedup_pivot.round(2))
-
-        print(f"\nAverage speedups across all experiments:")
-        for mode in SURROGATE_MODES:
-            speedup_pivot_fair = speedup_pivot.dropna()
-            if mode in speedup_pivot.columns:
-                avg_speedup = speedup_pivot[mode].mean()
-                avg_speedup_fair = speedup_pivot_fair[mode].mean()
-                print(f"  {mode}: {avg_speedup:.2f}×  ({avg_speedup_fair:.2f}× ignoring any experiments with NaN)")
+    # Display comprehensive dashboard first
+    print("\nSIMULATION PERFORMANCE SUMMARY")
+    print("=" * 100)
+    if not dashboard_df.empty:
+        # Format the dashboard display with grouped experiments
+        print(f"{'Mode':<25} {'Speedup':<8} {'Skipped%':<9} {'Theoretical':<11} {'Efficiency':<10} {'Error Range%':<15} {'Apps>5%':<8}")
+        print("-" * 100)
+        
+        # Group by experiment
+        current_exp = ""
+        for _, row in dashboard_df.iterrows():
+            if row['Experiment'] != current_exp:
+                current_exp = row['Experiment']
+                print(f"\n{current_exp}")
+                
+            speedup_str = f"{row['Speedup']:.2f}x" if row['Speedup'] else "N/A"
+            skipped_str = f"{row['Events_Skipped_Pct']:.1f}%" if row['Events_Skipped_Pct'] is not None else "N/A"
+            theoretical_str = f"{row['Theoretical_Speedup']:.2f}x" if row['Theoretical_Speedup'] else "N/A"
+            efficiency_str = f"{row['Efficiency']:.3f}" if row['Efficiency'] is not None else "N/A"
+            error_range_str = f"{row['Min_Error_Pct']:.1f}% - {row['Max_Error_Pct']:.1f}%" if row['Min_Error_Pct'] is not None else "N/A"
+            apps_str = f"{row['Apps_Above_5pct']}/{row['Total_Apps']}" if row['Apps_Above_5pct'] is not None else "N/A"
+            
+            print(f"  {row['Mode']:<23} {speedup_str:<8} {skipped_str:<9} {theoretical_str:<11} {efficiency_str:<10} {error_range_str:<15} {apps_str:<8}")
+        
+        # Add footnotes
+        print("\n" + "=" * 100)
+        print("Notes:")
+        print("  * Theoretical Speedup = 1 / (1 - Events Skipped%) = Maximum possible speedup from event reduction alone")
+        print("  * Efficiency = Actual Speedup / Theoretical Speedup = How well the mode utilizes event reduction potential")
+        print("  * Efficiency < 1.0 indicates overhead from communication, memory access, or other bottlenecks")
     else:
-        print("No speedup data available")
+        print("No dashboard data available")
 
-    print("\n📊 APPLICATION COMPLETION TIME ERRORS")
+    print("\nAPPLICATION COMPLETION TIME ERRORS")
     print("=" * 50)
     if not error_df.empty:
         # Pivot table for better readability
@@ -232,7 +291,7 @@ def main(base_path: Path, save_csv: bool = False) -> None:
 
     # Save detailed results to CSV
     if save_csv:
-        print(f"\n💾 SAVING DETAILED RESULTS")
+        print(f"\nSAVING DETAILED RESULTS")
         print("=" * 50)
 
         speedup_df.to_csv('speedup_results.csv', index=False)
@@ -243,7 +302,7 @@ def main(base_path: Path, save_csv: bool = False) -> None:
         print("  - error_results.csv")
 
     # Summary statistics
-    print(f"\n📈 SUMMARY STATISTICS")
+    print(f"\nSUMMARY STATISTICS")
     print("=" * 50)
 
     if not speedup_df.empty:

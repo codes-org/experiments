@@ -35,31 +35,34 @@ def adjust_lightness(color: str | tuple[float, float, float], amount: float = 0.
 
 def plot_sequence(
         ax: Any,
-        seq: Any,
-        names: Any,
-        height: Any,
+        job_data: Any,
         color: str = 'red',
         print_names: bool = True,
         shade_iter_before_jump: bool = False,
 ):
+    seq = job_data['time']
+    names = job_data['iter']
+    height = job_data['iter_time']
+    skipped = job_data['skipped']
+
     assert(len(seq) == len(height) == len(names))
     n = len(seq)
-    box_sequence = [(0, seq[0], height[0])]
-    box_sequence.extend(zip(seq, height[1:], height[1:]))
-    for i, (start, width, heit) in enumerate(box_sequence):
-        if heit == 0:
+    box_sequence = [(0, seq[0], height[0], skipped[0])]
+    box_sequence.extend(zip(seq, height[1:], height[1:], skipped[1:]))
+    for i, (start, width, heit, skip) in enumerate(box_sequence):
+        if skip:
+            assert heit == 0
             continue
-        is_box_before_jump = shade_iter_before_jump and i < n - 1 and names[i] + 1 < names[i+1]
+        is_box_before_jump = shade_iter_before_jump and i < n - 1 and skipped[i+1]
         lightness = 1.9 if is_box_before_jump else 1.5
         box = Rectangle((start, 0), width, heit, color=adjust_lightness(color, lightness))
         ax.add_patch(box)
 
-    non_zero_height = height != 0
-    cleaned_seq = list(seq[non_zero_height])
-    cleaned_height = list(height[non_zero_height])
-    cleaned_names = list(names[non_zero_height])
+    cleaned_seq = list(seq[~ skipped])
+    cleaned_height = list(height[~ skipped])
+    cleaned_names = list(names[~ skipped])
 
-    if height[-1] == 0:
+    if skipped[-1]:
         cleaned_seq.append(seq[-1])
         cleaned_height.append(mean_after_last_jump(height, shade_iter_before_jump))
         cleaned_names.append(names[-1])
@@ -123,13 +126,13 @@ def parse_iteration_log(log_file_path: pathlib.Path):
     else:
         log_file_names = [log_file_path]
 
-    log_pattern = r'ITERATION (\d+) node \d+ job (\d+) rank \d+ time (\d*\.?\d+)\n'
+    log_pattern = r'((?:SKIPPED TO |))ITERATION (\d+) node \d+ job (\d+) rank \d+ time (\d*\.?\d+)\n'
     #log_pattern = r' MARK_(\d+) node \d+ job (\d+) rank \d+ time (\d*\.?\d+)'
     log_iters_list = []
     restarted_at: dict[int, list[float]] = defaultdict(list)
     for log_file_name in log_file_names:
         log_file = log_file_name.open('r')
-        log_iters_one = np.fromregex(log_file, log_pattern, [('iter', np.int64), ('job', np.int64), ('time', np.float64)])
+        log_iters_one = np.fromregex(log_file, log_pattern, [('skipped', '?'), ('iter', np.int64), ('job', np.int64), ('time', np.float64)])
         log_iters_list.append(log_iters_one)
 
         _ = log_file.seek(0)
@@ -152,31 +155,30 @@ def parse_iteration_log(log_file_path: pathlib.Path):
         # finding time that each iteration took
         avg_iter_time = avg_timestamp.copy()
         avg_iter_time[1:] -= avg_timestamp[:-1]
-        # "removing" iterations for which we don't know how much they actually took
-        to_rem = iterations.copy()
-        to_rem[1:] -= to_rem[:-1] + 1
-        to_rem[0] = 0  # Assuming the first value hasn't been skipped
-        avg_iter_time[to_rem != 0] = 0
 
-        combined = np.zeros_like(iterations, dtype=[('iter', np.int64), ('time', np.float64), ('iter_time', np.float64)])
+        # "removing" iterations which were skipped!
+        log_iters_job = log_iters[log_iters['job'] == job]
+        skipped = np.array([np.any(log_iters_job[log_iters_job['iter'] == it]['skipped']) for it in iterations])
+
+        # fallback algorithm to detect skipped iterations
+        to_rem = iterations.copy()
+        to_rem[1:] -= to_rem[:-1] + 1  # with this we find a gap in the data, anything that is not ONE iteration apart is considered to have been skipped
+        to_rem[0] = 0  # Assuming the first value hasn't been skipped
+        skipped[to_rem != 0] = 1
+
+        avg_iter_time[skipped] = 0
+
+        combined = np.zeros_like(iterations, dtype=[('iter', np.int64), ('time', np.float64), ('iter_time', np.float64), ('skipped', np.bool_)])
         combined['iter'] = iterations
         combined['time'] = avg_timestamp
         combined['iter_time'] = avg_iter_time
+        combined['skipped'] = skipped
 
         correct_time_due_suspension(combined, restarted_at[job])
 
         jobs[int(job)] = combined
 
     return jobs
-
-
-# if __name__ == "__main__":
-#     (iterations, names, height), (iterations2, names2, height2) = iterations_count_example()
-#     fig, ax = plt.subplots(figsize=(8.8, 4), layout="constrained")
-#     plot_sequence(ax, iterations, names, height, 'blue')
-#     plot_sequence(ax, iterations2, names2, height2, 'red')
-#     plt.setp(ax.get_xticklabels(), rotation=30, ha="right")
-#     plt.show()
 
 
 if __name__ == "__main__":
@@ -229,21 +231,19 @@ if __name__ == "__main__":
     _ = ax.plot([0, largest_timestamp], [0, 0], "-", color="k", markerfacecolor="w")
 
     color_table = ['tab:red', 'tab:blue', 'tab:green', 'tab:black']
+    assert all(job < len(color_table) for job in parsed_logs.keys())
 
-    def key_jobs(i_job: tuple[int, int]) -> float:
-        _, job = i_job
+    def key_jobs(job: int) -> float:
         iter_times = parsed_logs[job]['iter_time']
         non_zero_iter_times = iter_times[iter_times != 0]
         return float(non_zero_iter_times.mean())
-    jobs_order_to_print = sorted(enumerate(parsed_logs.keys()), key=key_jobs, reverse=True)
+    jobs_order_to_print = sorted(parsed_logs.keys(), key=key_jobs, reverse=True)
 
-    for i, job in jobs_order_to_print:
+    for job in jobs_order_to_print:
         plot_sequence(
             ax,
-            parsed_logs[job]['time'],
-            parsed_logs[job]['iter'],
-            parsed_logs[job]['iter_time'],
-            color=color_table[i],
+            parsed_logs[job],
+            color=color_table[job],
             print_names=args.iter_count,
             shade_iter_before_jump=args.shade_jump)
     

@@ -322,7 +322,7 @@ if __name__ == "__main__":
         #execute = Execute(
         #    binary_path=[os.environ['SCRIPTS_ROOT_DIR'] + '/tmux-mpi', str(np), 'gdb', '--args', executable_path],
         #    scripts_dir=scripts_root_dir,
-        #    env_vars={'TMUX_MPI_MODE': 'pane', 'TMUX_MPI_SYNC_PANES': '1'},
+        #    env_vars={'TMUX_MPI_MODE': 'pane', 'TMUX_MPI_SYNC_PANES': '1', 'TMUX_MPI_MPIRUN': 'mpirun --map-by hwthread:oversubscribe'},
         #    redirect_output=False,
         #)
         # debug in sequential

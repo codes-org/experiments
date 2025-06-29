@@ -25,7 +25,12 @@ Feel free to copy individual scripts (or their entire subdirectory) and modify t
 
 ### Visualize iterations by multiple jobs
 
-Once you have got some results, you can run
+Once you have got some results, you can visualize how long each iteration took. Simply run:
+
+```bash
+python3 visualizing_jobs/print-iterations.py path-to/results/exp-XXX/experiment-name/iteration-logs/
+```
+For command line help, run `python3 visualizing_jobs/print-iterations.py --help`.
 
 ## Usage
 

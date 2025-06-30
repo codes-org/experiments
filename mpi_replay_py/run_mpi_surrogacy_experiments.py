@@ -3,7 +3,7 @@
 Testing Script for Multi-Application CODES Simulations
 Refactored to use flexible job classes supporting variable numbers of jobs.
 
-Claude wrote most of this. I'm very grateful for it :)
+Claude wrote a substancial amount of code in this folder. I'm very grateful for it :). I cleaned up the mess.
 """
 
 import os
@@ -308,6 +308,27 @@ if __name__ == "__main__":
     ]
 
     for iter in [1,2,3,4,5,6,7,8,9,10]:
+        experiments_1056.append(
+            # Experiment 1: Scaled from 58 → 862 nodes (preserves 80.6% utilization)
+            Experiment(
+                f'dfly-1056-01-jacobi175-milc144-milc455-ur88_iter={iter}',
+                [
+                    JacobiJob(nodes=175, iters=39, layout=(5, 7, 5), msg=50 * 1024, compute_delay=200),
+                    MilcJob(nodes=144, iters=30, layout=[18, 8], msg=480 * 1024, compute_delay=1500),
+                    MilcJob(nodes=455, iters=120, layout=[13, 5, 7], msg=10 * 1024, compute_delay=0.025),
+                    UrJob(nodes=88, period=1200),
+                ],
+                extraparams=['--extramem=1000000'],
+                net_config_variations={
+                    'app-and-network-freezing': {
+                        'NETWORK_SURR_ON': '1',
+                        'APP_SURR_ON': '1',
+                        'NETWORK_MODE': 'freeze',
+                        'ITERS_TO_COLLECT': str(iter),
+                    },
+                },
+            )
+        )
         experiments_8448.append(
             # Experiment 2 - different iterations: Scaled from 72 → 8400 nodes (preserves 1:2:3 ratio)
             Experiment(

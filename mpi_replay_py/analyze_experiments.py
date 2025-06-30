@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Analyze CODES experiment results to extract runtime performance and application accuracy.
+Mostly written by Claude.
 """
 
 import re
@@ -95,7 +96,7 @@ def analyze_all_experiments(base_path: Path, job_info: dict[str, list[str]]) -> 
             try:
                 with open(mode_path, 'r') as f:
                     content = f.read()
-                
+
                 runtime = extract_simulation_runtime(content, mode_path)
                 app_times = extract_app_completion_times(content)
                 net_events = extract_net_events_processed(content, mode_path)
@@ -198,7 +199,7 @@ def calculate_speedups_and_errors(results: list[dict[str, Any]]) -> tuple[list[d
                 max_error = max(app_errors)
                 apps_above_5pct = sum(1 for err in app_errors if err > 5.0)
                 total_apps = len(app_errors)
-                
+
                 # Calculate efficiency
                 efficiency = None
                 if speedup and theoretical_speedup:
@@ -219,7 +220,248 @@ def calculate_speedups_and_errors(results: list[dict[str, Any]]) -> tuple[list[d
 
     return speedup_data, error_data, dashboard_data
 
-def main(base_path: Path, save_csv: bool = False) -> None:
+def parse_iteration_experiment_name(exp_name: str) -> tuple[str, int | None]:
+    """Parse experiment name to extract base name and iteration number.
+
+    Returns:
+        tuple: (base_name, iteration_number) or (exp_name, None) if no iteration found
+    """
+    match = re.match(r'(.+)_iter=(\d+)$', exp_name)
+    if match:
+        base_name = match.group(1)
+        iteration = int(match.group(2))
+        return base_name, iteration
+    return exp_name, None
+
+def analyze_iteration_experiments(base_path: Path, job_info: dict[str, list[str]]) -> dict[str, list[dict[str, Any]]]:
+    """Analyze iteration experiments grouped by base experiment name"""
+    all_experiments = []
+
+    # Get all experiments in the directory
+    for exp_dir in base_path.iterdir():
+        if exp_dir.is_dir() and not exp_dir.name.startswith('.'):
+            all_experiments.append(exp_dir.name)
+
+    # Group experiments by base name
+    iteration_groups: dict[str, list[str]] = {}
+    for exp_name in all_experiments:
+        base_name, iteration = parse_iteration_experiment_name(exp_name)
+        if iteration is not None:
+            if base_name not in iteration_groups:
+                iteration_groups[base_name] = []
+            iteration_groups[base_name].append(exp_name)
+
+    # Analyze each group
+    results_by_base: dict[str, list[dict[str, Any]]] = {}
+    for base_name, exp_list in iteration_groups.items():
+        print(f"Analyzing iteration group: {base_name}")
+
+        # Analyze each experiment in the group
+        group_results = []
+        for exp_name in sorted(exp_list):  # Sort to ensure consistent order
+            exp_path = base_path / exp_name
+
+            # Reuse existing analysis logic
+            exp_data: dict[str, dict[str, Any]] = {}
+
+            for mode in ['high-fidelity'] + SURROGATE_MODES:
+                mode_path = exp_path / mode / 'model-result.txt'
+                if not mode_path.exists():
+                    continue
+
+                # Read file once and extract all data
+                try:
+                    with open(mode_path, 'r') as f:
+                        content = f.read()
+
+                    runtime = extract_simulation_runtime(content, mode_path)
+                    app_times = extract_app_completion_times(content)
+                    net_events = extract_net_events_processed(content, mode_path)
+
+                    exp_data[mode] = {
+                        'runtime': runtime,
+                        'app_times': app_times,
+                        'net_events': net_events
+                    }
+                except Exception as e:
+                    print(f"Error reading {mode_path}: {e}")
+                    exp_data[mode] = {
+                        'runtime': None,
+                        'app_times': {},
+                        'net_events': None
+                    }
+
+            # Parse iteration number
+            _, iteration = parse_iteration_experiment_name(exp_name)
+
+            group_results.append({
+                'experiment': exp_name,
+                'base_name': base_name,
+                'iteration': iteration,
+                'data': exp_data,
+                'job_types': job_info.get(base_name, job_info.get(exp_name, []))
+            })
+
+        results_by_base[base_name] = group_results
+
+    return results_by_base
+
+def calculate_iteration_metrics(iteration_results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Calculate metrics for iteration experiments"""
+    iteration_data = []
+
+    # Find high-fidelity baseline (should be in iter=1)
+    hf_baseline = None
+    for result in iteration_results:
+        if 'high-fidelity' in result['data'] and result['data']['high-fidelity']['runtime']:
+            hf_baseline = result['data']['high-fidelity']
+            break
+
+    if not hf_baseline:
+        print("Warning: No high-fidelity baseline found for iteration analysis")
+        return []
+
+    hf_runtime = hf_baseline['runtime']
+    hf_app_times = hf_baseline['app_times']
+    hf_net_events = hf_baseline['net_events']
+
+    # Process each iteration
+    for result in iteration_results:
+        iteration = result['iteration']
+        job_types = result['job_types']
+
+        # Add high-fidelity entry only for iteration 1
+        if iteration == 1:
+            iteration_data.append({
+                'Base_Experiment': result['base_name'],
+                'Iteration': iteration,
+                'Mode': 'high-fidelity',
+                'Speedup': 1.0,
+                'Events_Skipped_Pct': 0.0,
+                'Theoretical_Speedup': 1.0,
+                'Efficiency': 1.0,
+                'Min_Error_Pct': 0.0,
+                'Max_Error_Pct': 0.0,
+                'Apps_Above_5pct': 0,
+                'Total_Apps': len(hf_app_times) if hf_app_times else 0
+            })
+
+        # Process surrogate modes
+        for mode in SURROGATE_MODES:
+            if mode not in result['data']:
+                continue
+
+            mode_data = result['data'][mode]
+
+            # Calculate speedup
+            speedup = None
+            if hf_runtime and mode_data['runtime']:
+                speedup = hf_runtime / mode_data['runtime']
+
+            # Calculate event metrics
+            events_skipped_pct = None
+            theoretical_speedup = None
+            if hf_net_events and mode_data['net_events']:
+                event_ratio = mode_data['net_events'] / hf_net_events
+                events_skipped_pct = (1 - event_ratio) * 100
+                theoretical_speedup = 1 / event_ratio
+
+            # Calculate efficiency
+            efficiency = None
+            if speedup and theoretical_speedup:
+                efficiency = speedup / theoretical_speedup
+
+            # Calculate application errors
+            app_errors = []
+            for app_id in hf_app_times.keys():
+                if app_id in mode_data['app_times']:
+                    hf_time = hf_app_times[app_id]
+                    mode_time = mode_data['app_times'][app_id]
+
+                    if hf_time and mode_time:
+                        error = ((mode_time - hf_time) / hf_time) * 100
+                        app_errors.append(abs(error))
+
+            # Calculate error metrics
+            min_error = min(app_errors) if app_errors else None
+            max_error = max(app_errors) if app_errors else None
+            apps_above_5pct = sum(1 for err in app_errors if err > 5.0) if app_errors else 0
+            total_apps = len(app_errors) if app_errors else 0
+
+            iteration_data.append({
+                'Base_Experiment': result['base_name'],
+                'Iteration': iteration,
+                'Mode': mode,
+                'Speedup': speedup,
+                'Events_Skipped_Pct': events_skipped_pct,
+                'Theoretical_Speedup': theoretical_speedup,
+                'Efficiency': efficiency,
+                'Min_Error_Pct': min_error,
+                'Max_Error_Pct': max_error,
+                'Apps_Above_5pct': apps_above_5pct,
+                'Total_Apps': total_apps
+            })
+
+    return iteration_data
+
+def display_iteration_analysis(iteration_data: list[dict[str, Any]]) -> None:
+    """Display iteration analysis results"""
+    if not iteration_data:
+        print("No iteration data to display")
+        return
+
+    # Group by base experiment
+    base_experiments = {}
+    for row in iteration_data:
+        base_name = row['Base_Experiment']
+        if base_name not in base_experiments:
+            base_experiments[base_name] = []
+        base_experiments[base_name].append(row)
+
+    for base_name, rows in base_experiments.items():
+        print(f"\nITERATION ANALYSIS SUMMARY")
+        print("=" * 100)
+        print(f"Base Experiment: {base_name}")
+        print()
+        print(f"{'Iteration':<10} {'Mode':<25} {'Speedup':<8} {'Skipped%':<9} {'Theoretical':<11} {'Efficiency':<10} {'Error Range%':<15} {'Apps>5%':<8}")
+        print("-" * 100)
+
+        # Sort by iteration, then by high-fidelity first, then surrogate modes
+        def sort_key(row):
+            iteration = row['Iteration']
+            mode = row['Mode']
+            if mode == 'high-fidelity':
+                return (iteration, 0)
+            else:
+                return (iteration, 1, mode)
+
+        sorted_rows = sorted(rows, key=sort_key)
+
+        for row in sorted_rows:
+            iteration_str = str(row['Iteration'])
+            mode_str = row['Mode']
+            speedup_str = f"{row['Speedup']:.2f}x" if row['Speedup'] else "N/A"
+            skipped_str = f"{row['Events_Skipped_Pct']:.1f}%" if row['Events_Skipped_Pct'] is not None else "N/A"
+            theoretical_str = f"{row['Theoretical_Speedup']:.2f}x" if row['Theoretical_Speedup'] else "N/A"
+            efficiency_str = f"{row['Efficiency']:.3f}" if row['Efficiency'] is not None else "N/A"
+
+            if row['Min_Error_Pct'] is not None and row['Max_Error_Pct'] is not None:
+                error_range_str = f"{row['Min_Error_Pct']:.1f}% - {row['Max_Error_Pct']:.1f}%"
+            else:
+                error_range_str = "N/A"
+
+            apps_str = f"{row['Apps_Above_5pct']}/{row['Total_Apps']}" if row['Apps_Above_5pct'] is not None else "N/A"
+
+            print(f"{iteration_str:<10} {mode_str:<25} {speedup_str:<8} {skipped_str:<9} {theoretical_str:<11} {efficiency_str:<10} {error_range_str:<15} {apps_str:<8}")
+
+        # Add footnotes
+        print("\n" + "=" * 100)
+        print("Notes:")
+        print("  * Theoretical Speedup = 1 / (1 - Events Skipped%) = Maximum possible speedup from event reduction alone")
+        print("  * Efficiency = Actual Speedup / Theoretical Speedup = How well the mode utilizes event reduction potential")
+        print("  * Efficiency < 1.0 indicates overhead from communication, memory access, or other bottlenecks")
+
+def main_experiments_results(base_path: Path, save_csv: bool = False) -> None:
     print("Analyzing CODES experiment results")
     print("=" * 50)
 
@@ -244,23 +486,23 @@ def main(base_path: Path, save_csv: bool = False) -> None:
         # Format the dashboard display with grouped experiments
         print(f"{'Mode':<25} {'Speedup':<8} {'Skipped%':<9} {'Theoretical':<11} {'Efficiency':<10} {'Error Range%':<15} {'Apps>5%':<8}")
         print("-" * 100)
-        
+
         # Group by experiment
         current_exp = ""
         for _, row in dashboard_df.iterrows():
             if row['Experiment'] != current_exp:
                 current_exp = row['Experiment']
                 print(f"\n{current_exp}")
-                
+
             speedup_str = f"{row['Speedup']:.2f}x" if row['Speedup'] else "N/A"
             skipped_str = f"{row['Events_Skipped_Pct']:.1f}%" if row['Events_Skipped_Pct'] is not None else "N/A"
             theoretical_str = f"{row['Theoretical_Speedup']:.2f}x" if row['Theoretical_Speedup'] else "N/A"
             efficiency_str = f"{row['Efficiency']:.3f}" if row['Efficiency'] is not None else "N/A"
             error_range_str = f"{row['Min_Error_Pct']:.1f}% - {row['Max_Error_Pct']:.1f}%" if row['Min_Error_Pct'] is not None else "N/A"
             apps_str = f"{row['Apps_Above_5pct']}/{row['Total_Apps']}" if row['Apps_Above_5pct'] is not None else "N/A"
-            
+
             print(f"  {row['Mode']:<23} {speedup_str:<8} {skipped_str:<9} {theoretical_str:<11} {efficiency_str:<10} {error_range_str:<15} {apps_str:<8}")
-        
+
         # Add footnotes
         print("\n" + "=" * 100)
         print("Notes:")
@@ -319,8 +561,57 @@ def main(base_path: Path, save_csv: bool = False) -> None:
         total_error_count = len(error_df)
         print(f"Results with <5% error: {low_error_count}/{total_error_count} ({low_error_count/total_error_count*100:.1f}%)")
 
+def main_iteration_analysis(base_path: Path, save_csv: bool = False) -> None:
+    """Main function for iteration analysis"""
+    print("Analyzing CODES iteration experiments")
+    print("=" * 50)
+
+    # Load job information
+    job_info = load_experiment_metadata(base_path)
+
+    # Analyze iteration experiments
+    results_by_base = analyze_iteration_experiments(base_path, job_info)
+
+    if not results_by_base:
+        print("No iteration experiments found!")
+        print("Make sure experiment directories follow the pattern: experiment_name_iter=X")
+        return
+
+    # Process each base experiment
+    for base_name, iteration_results in results_by_base.items():
+        print(f"\nProcessing base experiment: {base_name}")
+
+        # Calculate iteration metrics
+        iteration_data = calculate_iteration_metrics(iteration_results)
+
+        # Display results
+        display_iteration_analysis(iteration_data)
+
+        # Save to CSV if requested
+        if save_csv and iteration_data:
+            import pandas as pd
+            df = pd.DataFrame(iteration_data)
+            csv_filename = f"iteration_analysis_{base_name}.csv"
+            df.to_csv(csv_filename, index=False)
+            print(f"\nIteration analysis saved to {csv_filename}")
+
+    print(f"\nAnalyzed {len(results_by_base)} base experiment(s) with iteration variants")
+
 if __name__ == "__main__":
-    base_path = Path("results/exp-225-ghc-iter=2/")
-    if len(sys.argv) > 1:
-        base_path = Path(sys.argv[1])
-    main(base_path)
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Analyze CODES experiment results")
+    parser.add_argument("path", nargs="?", default="results/exp-225-ghc-iter=2/",
+                        help="Path to experiment results directory")
+    parser.add_argument("--iteration-analysis", action="store_true",
+                        help="Analyze experiments with different iteration counts")
+    parser.add_argument("--save-csv", action="store_true",
+                        help="Save results to CSV files")
+
+    args = parser.parse_args()
+    base_path = Path(args.path)
+
+    if args.iteration_analysis:
+        main_iteration_analysis(base_path, args.save_csv)
+    else:
+        main_experiments_results(base_path, args.save_csv)

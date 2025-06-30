@@ -11,4 +11,7 @@ python ../visualizing_jobs/print-iterations.py results/exp-XXX/dfly-8448-01-jaco
 python ../visualizing_jobs/print-iterations.py results/exp-XXX/dfly-8448-02-jacobi1400-jacobi2800-milc4200/high-fidelity/iteration-logs --legend Jacobi3D Jacobi3D MILC --end 826e6 --output figures/large-jacobi-jacobi-milc-bad
 python ../visualizing_jobs/print-iterations.py results/exp-XXX/dfly-8448-02-jacobi1400-jacobi2800-milc4200/app-surrogate/iteration-logs --legend Jacobi3D Jacobi3D MILC --end 826e6 --output figures/large-jacobi-jacobi-milc-bad-surrogate
 python ../visualizing_jobs/print-iterations.py results/exp-XXX/dfly-8448-02-jacobi1400-jacobi2800-milc4200_iter=10/app-surrogate/iteration-logs --legend Jacobi3D Jacobi3D MILC --end 84e6 --output figures/large-jacobi-jacobi-milc-bad-zoomed-in
+python ../visualizing_jobs/print-iterations.py results/exp-XXX/dfly-1056-01-jacobi175-milc144-milc455-ur88/high-fidelity/iteration-logs --legend Jacobi3D MILC MILC --end 99e6 --output figures/large-jacobi-jacobi-milc-bad2
+python ../visualizing_jobs/print-iterations.py results/exp-XXX/dfly-1056-01-jacobi175-milc144-milc455-ur88/app-and-network-freezing/iteration-logs --legend Jacobi3D MILC MILC --end 99e6 --output figures/large-jacobi-jacobi-milc-bad2-surrogate
+python ../visualizing_jobs/print-iterations.py results/exp-XXX/dfly-1056-01-jacobi175-milc144-milc455-ur88/high-fidelity/iteration-logs --legend Jacobi3D MILC MILC --start 34e6 --end 70e6 --output figures/large-jacobi-jacobi-milc-bad2-zoomed-in
 ```

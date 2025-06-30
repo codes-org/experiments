@@ -71,7 +71,7 @@ def plot_sequence(
     ax.scatter(cleaned_seq[:-1], cleaned_height[:-1], marker='.', color=color)
     ax.scatter(cleaned_seq[-1], cleaned_height[-1], marker='^', color=color)
     ax.vlines(cleaned_seq, 0, cleaned_height, color=adjust_lightness(color, 1.3))
-    
+
     # annotate lines
     if print_names:
         for d, h, r in zip(cleaned_seq, cleaned_height, cleaned_names):
@@ -188,7 +188,8 @@ if __name__ == "__main__":
     _ = parser.add_argument('--iter-count', dest='iter_count', action='store_true')
     _ = parser.add_argument('--legends', nargs='+', help='Application names', required=False)
     _ = parser.add_argument('--no-show-plot', dest='show_plot', action='store_false')
-    _ = parser.add_argument('--end', type=float, help="End of simulation (for plotting purposes)")
+    _ = parser.add_argument('--start', type=float, help="Start of zoom in window (for plotting purposes, default=0)")
+    _ = parser.add_argument('--end', type=float, help="End of zoom in window (for plotting purposes, default=end of simulation)")
     _ = parser.add_argument('--no-shade-jump', dest='shade_jump', action='store_false',
                             help='If a jump is detected (fast-forwarding) the last iteration before the jump is shaded differently')
     args = parser.parse_args()
@@ -220,15 +221,22 @@ if __name__ == "__main__":
         exit(0)
 
     # Creating plot with data
-    fig, ax = plt.subplots(figsize=(6, 3), layout="constrained")
+    fig, ax = plt.subplots(figsize=(10, 5), layout="constrained")
     _ = ax.set_xlabel("Total virtual time (ns)")
     _ = ax.set_ylabel("Virtual time \nper iteration (ns)")
     #ax.set(title="")
-    if args.end:
-        largest_timestamp = args.end
-    else:
-        largest_timestamp = max(v['time'].max() for v in parsed_logs.values())
-    _ = ax.plot([0, largest_timestamp], [0, 0], "-", color="k", markerfacecolor="w")
+
+    # adjusting plot (to zoom in)
+    end_of_simulation = max(v['time'].max() for v in parsed_logs.values())
+    start = args.start if args.start else 0
+    end = args.end if args.end else end_of_simulation
+    if end > end_of_simulation:
+        end_of_simulation = end
+    _ = ax.plot([0, end_of_simulation], [0, 0], "-", color="k", markerfacecolor="w")
+
+    padding = 0.05
+    width_plot = end - start
+    _ = ax.set_xlim(start - width_plot * padding, end + width_plot * padding)
 
     color_table = ['tab:red', 'tab:blue', 'tab:green', 'tab:black']
     assert all(job < len(color_table) for job in parsed_logs.keys())
@@ -246,7 +254,7 @@ if __name__ == "__main__":
             color=color_table[job],
             print_names=args.iter_count,
             shade_iter_before_jump=args.shade_jump)
-    
+
     _ = plt.setp(ax.get_xticklabels(), rotation=30, ha="right")
 
     if args.legends:
@@ -258,7 +266,7 @@ if __name__ == "__main__":
             legends.append(legend)
             custom_lines.append(Line2D([0], [0], color=color))
         _ = ax.legend(custom_lines, legends)
-    
+
     #ax.margins(y=0.1)
     if args.output:
         plt.tight_layout()

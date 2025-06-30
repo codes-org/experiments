@@ -307,6 +307,27 @@ if __name__ == "__main__":
         ),
     ]
 
+    for iter in [1,2,3,4,5,6,7,8,9,10]:
+        experiments_8448.append(
+            # Experiment 2 - different iterations: Scaled from 72 → 8400 nodes (preserves 1:2:3 ratio)
+            Experiment(
+                f'dfly-8448-02-jacobi1400-jacobi2800-milc4200_iter={iter}',
+                [
+                    JacobiJob(nodes=1400, iters=110, layout=(10, 10, 14), msg=50 * 1024, compute_delay=200),
+                    JacobiJob(nodes=2800, iters=200, layout=(10, 14, 20), msg=10 * 1024, compute_delay=500),
+                    MilcJob(nodes=4200, iters=120, layout=[6, 7, 10, 10], msg=486 * 1024, compute_delay=0.025),
+                ],
+                extraparams=['--extramem=1000000'],
+                net_config_variations={
+                    'app-surrogate': {
+                        'NETWORK_SURR_ON': '0',
+                        'APP_SURR_ON': '1',
+                        'ITERS_TO_COLLECT': str(iter),
+                    },
+                },
+            )
+        )
+
     try:
         _ = export_experiment_metadata(experiments_72 + experiments_1056 + experiments_8448, exp_folder)
 

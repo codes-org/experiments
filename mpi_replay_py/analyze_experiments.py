@@ -404,6 +404,54 @@ def calculate_iteration_metrics(iteration_results: list[dict[str, Any]]) -> list
 
     return iteration_data
 
+def generate_raw_data_csv(iteration_results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Generate raw data for CSV export including runtimes and net events"""
+    raw_data = []
+
+    for result in iteration_results:
+        base_name = result['base_name']
+        iteration = result['iteration']
+
+        # Process all modes including high-fidelity
+        for mode in ['high-fidelity'] + SURROGATE_MODES:
+            if mode not in result['data']:
+                continue
+
+            mode_data = result['data'][mode]
+
+            # Add simulation runtime data
+            raw_data.append({
+                'Base_Experiment': base_name,
+                'Iteration': iteration,
+                'Mode': mode,
+                'Data_Type': 'simulation_runtime',
+                'Value': mode_data['runtime'],
+                'Unit': 'seconds'
+            })
+
+            # Add net events data
+            raw_data.append({
+                'Base_Experiment': base_name,
+                'Iteration': iteration,
+                'Mode': mode,
+                'Data_Type': 'net_events_processed',
+                'Value': mode_data['net_events'],
+                'Unit': 'events'
+            })
+
+            # Add application completion times
+            for app_id, app_time in mode_data['app_times'].items():
+                raw_data.append({
+                    'Base_Experiment': base_name,
+                    'Iteration': iteration,
+                    'Mode': mode,
+                    'Data_Type': f'app_{app_id}_completion_time',
+                    'Value': app_time,
+                    'Unit': 'nanoseconds'
+                })
+
+    return raw_data
+
 def display_iteration_analysis(iteration_data: list[dict[str, Any]]) -> None:
     """Display iteration analysis results"""
     if not iteration_data:
@@ -461,7 +509,7 @@ def display_iteration_analysis(iteration_data: list[dict[str, Any]]) -> None:
         print("  * Efficiency = Actual Speedup / Theoretical Speedup = How well the mode utilizes event reduction potential")
         print("  * Efficiency < 1.0 indicates overhead from communication, memory access, or other bottlenecks")
 
-def main_experiments_results(base_path: Path, save_csv: bool = False) -> None:
+def main_experiments_results(base_path: Path, saveas: Path | None = None) -> None:
     print("Analyzing CODES experiment results")
     print("=" * 50)
 
@@ -532,16 +580,18 @@ def main_experiments_results(base_path: Path, save_csv: bool = False) -> None:
         print("No error data available")
 
     # Save detailed results to CSV
-    if save_csv:
+    if saveas:
         print(f"\nSAVING DETAILED RESULTS")
         print("=" * 50)
 
-        speedup_df.to_csv('speedup_results.csv', index=False)
-        error_df.to_csv('error_results.csv', index=False)
+        speedup_df.to_csv(f'{saveas}_speedup_results.csv', index=False)
+        error_df.to_csv(f'{saveas}_error_results.csv', index=False)
+        dashboard_df.to_csv(f'{saveas}_dashboard_results.csv', index=False)
 
         print("Saved detailed results to:")
-        print("  - speedup_results.csv")
-        print("  - error_results.csv")
+        print(f"  - {saveas}_speedup_results.csv")
+        print(f"  - {saveas}_error_results.csv")
+        print(f"  - {saveas}_dashboard_results.csv")
 
     # Summary statistics
     print(f"\nSUMMARY STATISTICS")
@@ -561,7 +611,7 @@ def main_experiments_results(base_path: Path, save_csv: bool = False) -> None:
         total_error_count = len(error_df)
         print(f"Results with <5% error: {low_error_count}/{total_error_count} ({low_error_count/total_error_count*100:.1f}%)")
 
-def main_iteration_analysis(base_path: Path, save_csv: bool = False) -> None:
+def main_iteration_analysis(base_path: Path, saveas: Path | None = None) -> None:
     """Main function for iteration analysis"""
     print("Analyzing CODES iteration experiments")
     print("=" * 50)
@@ -588,12 +638,22 @@ def main_iteration_analysis(base_path: Path, save_csv: bool = False) -> None:
         display_iteration_analysis(iteration_data)
 
         # Save to CSV if requested
-        if save_csv and iteration_data:
+        if saveas and iteration_data:
             import pandas as pd
+
+            # Save iteration analysis
             df = pd.DataFrame(iteration_data)
-            csv_filename = f"iteration_analysis_{base_name}.csv"
-            df.to_csv(csv_filename, index=False)
-            print(f"\nIteration analysis saved to {csv_filename}")
+            analysis_filename = f"{saveas}_iteration_analysis_{base_name}.csv"
+            df.to_csv(analysis_filename, index=False)
+            print(f"\nIteration analysis saved to {analysis_filename}")
+
+            # Generate and save raw data
+            raw_data = generate_raw_data_csv(iteration_results)
+            if raw_data:
+                raw_df = pd.DataFrame(raw_data)
+                raw_filename = f"{saveas}_raw_data_{base_name}.csv"
+                raw_df.to_csv(raw_filename, index=False)
+                print(f"Raw data saved to {raw_filename}")
 
     print(f"\nAnalyzed {len(results_by_base)} base experiment(s) with iteration variants")
 
@@ -605,13 +665,13 @@ if __name__ == "__main__":
                         help="Path to experiment results directory")
     parser.add_argument("--iteration-analysis", action="store_true",
                         help="Analyze experiments with different iteration counts")
-    parser.add_argument("--save-csv", action="store_true",
-                        help="Save results to CSV files")
+    parser.add_argument("--save-as", type=Path, default=None,
+                        help="Save results to CSV files with given prefix (e.g., --saveas experiments-3)")
 
     args = parser.parse_args()
     base_path = Path(args.path)
 
     if args.iteration_analysis:
-        main_iteration_analysis(base_path, args.save_csv)
+        main_iteration_analysis(base_path, args.saveas)
     else:
-        main_experiments_results(base_path, args.save_csv)
+        main_experiments_results(base_path, args.saveas)

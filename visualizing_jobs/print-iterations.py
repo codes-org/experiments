@@ -7,6 +7,7 @@ import pathlib
 import colorsys
 from collections import defaultdict
 import os
+import csv
 
 import matplotlib.pyplot as plt
 import matplotlib
@@ -181,10 +182,101 @@ def parse_iteration_log(log_file_path: pathlib.Path):
     return jobs
 
 
+def export_iteration_data_to_csv(parsed_logs: dict[int, Any], saveas: pathlib.Path, legends: list[str] | None = None) -> None:
+    """Export iteration data to CSV files using native Python csv module"""
+
+    # Create application name mapping
+    app_names = {}
+    if legends:
+        for job_id in parsed_logs.keys():
+            if job_id < len(legends):
+                app_names[job_id] = legends[job_id]
+            else:
+                app_names[job_id] = f"App_{job_id}"
+    else:
+        for job_id in parsed_logs.keys():
+            app_names[job_id] = f"App_{job_id}"
+
+    # Export raw iteration data
+    raw_filename = f"{saveas}_iteration_raw_data.csv"
+    with open(raw_filename, 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+
+        # Write header
+        writer.writerow(['Job_ID', 'Application_Name', 'Iteration', 'Cumulative_Time_ns', 'Iteration_Time_ns', 'Skipped'])
+
+        # Write data for each job
+        for job_id, job_data in parsed_logs.items():
+            app_name = app_names[job_id]
+
+            for i in range(len(job_data)):
+                writer.writerow([
+                    job_id,
+                    app_name,
+                    int(job_data['iter'][i]),
+                    float(job_data['time'][i]),
+                    float(job_data['iter_time'][i]),
+                    bool(job_data['skipped'][i])
+                ])
+
+    # Export summary statistics
+    summary_filename = f"{saveas}_iteration_summary.csv"
+    with open(summary_filename, 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+
+        # Write header
+        writer.writerow([
+            'Job_ID', 'Application_Name', 'Total_Iterations', 'Skipped_Iterations',
+            'Mean_Iteration_Time_ns', 'Std_Iteration_Time_ns', 'Total_Virtual_Time_ns',
+            'Max_Iteration_Time_ns', 'Min_Iteration_Time_ns'
+        ])
+
+        # Calculate and write statistics for each job
+        for job_id, job_data in parsed_logs.items():
+            app_name = app_names[job_id]
+
+            total_iterations = len(job_data)
+            skipped_iterations = int(np.sum(job_data['skipped']))
+
+            # Calculate statistics only on non-skipped iterations
+            non_skipped_times = job_data['iter_time'][~job_data['skipped']]
+
+            if len(non_skipped_times) > 0:
+                mean_iter_time = float(np.mean(non_skipped_times))
+                std_iter_time = float(np.std(non_skipped_times))
+                max_iter_time = float(np.max(non_skipped_times))
+                min_iter_time = float(np.min(non_skipped_times))
+                total_virtual_time = float(np.sum(non_skipped_times))
+            else:
+                mean_iter_time = 0.0
+                std_iter_time = 0.0
+                max_iter_time = 0.0
+                min_iter_time = 0.0
+                total_virtual_time = 0.0
+
+            writer.writerow([
+                job_id,
+                app_name,
+                total_iterations,
+                skipped_iterations,
+                mean_iter_time,
+                std_iter_time,
+                total_virtual_time,
+                max_iter_time,
+                min_iter_time
+            ])
+
+    print(f"Iteration data exported to:")
+    print(f"  - {raw_filename}")
+    print(f"  - {summary_filename}")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     _ = parser.add_argument('file', type=pathlib.Path)
     _ = parser.add_argument('--output', type=pathlib.Path, help='Name of output figure', default=None)
+    _ = parser.add_argument('--save-as', type=pathlib.Path, default=None,
+                            help='Save iteration data to CSV files with given prefix (e.g., --saveas experiment-1)')
     _ = parser.add_argument('--iter-count', dest='iter_count', action='store_true')
     _ = parser.add_argument('--legends', nargs='+', help='Application names', required=False)
     _ = parser.add_argument('--no-show-plot', dest='show_plot', action='store_false')
@@ -216,6 +308,10 @@ if __name__ == "__main__":
 
     final_timestamp = float(max(job['time'].max() for job in parsed_logs.values()))
     print("Simulation end =", final_timestamp)
+
+    # Export to CSV if requested
+    if args.saveas:
+        export_iteration_data_to_csv(parsed_logs, args.saveas, args.legends)
 
     if not args.show_plot:
         exit(0)

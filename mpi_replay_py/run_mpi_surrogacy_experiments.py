@@ -308,6 +308,16 @@ if __name__ == "__main__":
     ]
 
     for iter in [1,2,3,4,5,6,7,8,9,10]:
+        # The first experiment also runs the simulation in high-fidelity
+        net_config_variations = {}
+        if iter == 1:
+            net_config_variations = {
+                'high-fidelity': {
+                    'NETWORK_SURR_ON': '0',
+                    'APP_SURR_ON': '0'
+                },
+            }
+
         experiments_1056.append(
             # Experiment 1: Scaled from 58 → 862 nodes (preserves 80.6% utilization)
             Experiment(
@@ -319,7 +329,7 @@ if __name__ == "__main__":
                     UrJob(nodes=88, period=1200),
                 ],
                 extraparams=['--extramem=1000000'],
-                net_config_variations={
+                net_config_variations= net_config_variations | {
                     'app-and-network-freezing': {
                         'NETWORK_SURR_ON': '1',
                         'APP_SURR_ON': '1',
@@ -339,7 +349,7 @@ if __name__ == "__main__":
                     MilcJob(nodes=4200, iters=120, layout=[6, 7, 10, 10], msg=486 * 1024, compute_delay=0.025),
                 ],
                 extraparams=['--extramem=1000000'],
-                net_config_variations={
+                net_config_variations= net_config_variations | {
                     'app-surrogate': {
                         'NETWORK_SURR_ON': '0',
                         'APP_SURR_ON': '1',

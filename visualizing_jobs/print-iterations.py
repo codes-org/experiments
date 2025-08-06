@@ -310,8 +310,8 @@ if __name__ == "__main__":
     print("Simulation end =", final_timestamp)
 
     # Export to CSV if requested
-    if args.saveas:
-        export_iteration_data_to_csv(parsed_logs, args.saveas, args.legends)
+    if args.save_as:
+        export_iteration_data_to_csv(parsed_logs, args.save_as, args.legends)
 
     if not args.show_plot:
         exit(0)

@@ -35,8 +35,8 @@ template_vars = {
     'EVERY_NSECS': '1.0e6',
     'ITERS_TO_COLLECT': '3',
     # Other parameters, not needed right now
-    'PACKET_LATENCY_TRACE_PATH': '',
     'BUFFER_SNAPSHOTS': '',
+    'PACKET_LATENCY_TRACE_PATH': 'packet_latency',
 
     # Options in other files than dfly-*.conf files
     'CPU_FREQ': '4e9',  # in Hz
@@ -69,11 +69,60 @@ if __name__ == "__main__":
             ],
             extraparams=['--extramem=1000000'],
         ),
+
+        Experiment(
+            'dfly-72-02-jacobi12-jacobi24-milc36',
+            [
+                JacobiJob(nodes=12, iters=110, layout=(2, 3, 2), msg=50 * 1024, compute_delay=200),
+                JacobiJob(nodes=24, iters=200, layout=(4, 2, 3), msg=10 * 1024, compute_delay=500),
+                MilcJob(nodes=36, iters=120, layout=[2, 2, 3, 3], msg=486 * 1024, compute_delay=0.025),
+            ],
+            extraparams=['--extramem=1000000'],
+        ),
+
+        Experiment(
+            'dfly-72-03-jacobi36-milc24-lammps12',
+            [
+                JacobiJob(nodes=24, iters=39, layout=(4, 3, 2), msg=50 * 1024, compute_delay=200),
+                MilcJob(nodes=36, iters=120, layout=[2, 2, 3, 3], msg=486 * 1024, compute_delay=0.025),
+                LammpsJob(nodes=12, time_steps=5, replicas=(3, 2, 2)),
+            ],
+            extraparams=['--extramem=1000000'],
+        ),
+
+        Experiment(
+            'dfly-72-04-jacobi24-milc24-ur6',
+            [
+                JacobiJob(nodes=24, iters=25, layout=(6, 2, 2), msg=200 * 1024, compute_delay=10),
+                MilcJob(nodes=24, iters=150, layout=[3, 2, 2, 2], msg=150 * 1024, compute_delay=500),
+                UrJob(nodes=6, period=1200),
+            ],
+            extraparams=['--extramem=1000000'],
+        ),
+
+        Experiment(
+            'dfly-72-05-milc20-jacobi20-ur30',
+            [
+                MilcJob(nodes=22, iters=100, layout=[2, 11, 1, 1], msg=400 * 1024, compute_delay=50),
+                JacobiJob(nodes=20, iters=150, layout=(4, 5, 1), msg=80 * 1024, compute_delay=200),
+                UrJob(nodes=30, period=726.609003),
+            ],
+            extraparams=['--extramem=1000000'],
+        ),
+
+        Experiment(
+            'dfly-72-06-jacobi20-milc24-lammps20-ur8',
+            [
+                JacobiJob(nodes=20, iters=2000, layout=(5, 2, 2), msg=60 * 1024, compute_delay=400),
+                MilcJob(nodes=24, iters=500, layout=[3, 2, 2, 2], msg=400 * 1024, compute_delay=300),
+                LammpsJob(nodes=20, time_steps=10, replicas=(4, 5, 1)),
+                UrJob(nodes=8, period=1000),
+            ],
+            extraparams=['--extramem=1000000'],
+        ),
     ]
 
     try:
-        _ = export_experiment_metadata(experiments_72, exp_folder)
-
         # ideal np = 9 for 72 nodes, and np = 33 for 1056 and 8448 nodes
         np = 3
 

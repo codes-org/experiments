@@ -274,6 +274,7 @@ class TestRunner:
             print("Successfully completed experiment")
         else:
             print("Failed to complete experiment")
+            self.failed_experiments.append(exp_name)
         print("----------------------------------------")
 
     def run_experiment_with_config_variations(self, experiment: Experiment, template_vars: dict[str, str]) -> None:

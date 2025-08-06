@@ -59,7 +59,7 @@ def export_experiment_metadata(experiments_list: list[Experiment], output_path: 
 if __name__ == "__main__":
 
     # Define simulation modes
-    net_config_variations = {
+    config_variations = {
         'high-fidelity': {
             'NETWORK_SURR_ON': '0',
             'APP_SURR_ON': '0'
@@ -91,7 +91,7 @@ if __name__ == "__main__":
                 UrJob(nodes=6, period=1200),
             ],
             extraparams=['--extramem=1000000'],
-            net_config_variations=net_config_variations,
+            config_variations=config_variations,
         ),
 
         Experiment(
@@ -102,7 +102,7 @@ if __name__ == "__main__":
                 MilcJob(nodes=36, iters=120, layout=[2, 2, 3, 3], msg=486 * 1024, compute_delay=0.025),
             ],
             extraparams=['--extramem=1000000'],
-            net_config_variations=net_config_variations,
+            config_variations=config_variations,
         ),
 
         Experiment(
@@ -113,7 +113,7 @@ if __name__ == "__main__":
                 LammpsJob(nodes=12, time_steps=5, replicas=(3, 2, 2)),
             ],
             extraparams=['--extramem=1000000'],
-            net_config_variations=net_config_variations,
+            config_variations=config_variations,
         ),
 
         Experiment(
@@ -124,7 +124,7 @@ if __name__ == "__main__":
                 UrJob(nodes=6, period=1200),
             ],
             extraparams=['--extramem=1000000'],
-            net_config_variations=net_config_variations,
+            config_variations=config_variations,
         ),
 
         Experiment(
@@ -135,7 +135,7 @@ if __name__ == "__main__":
                 UrJob(nodes=30, period=726.609003),
             ],
             extraparams=['--extramem=1000000'],
-            net_config_variations=net_config_variations,
+            config_variations=config_variations,
         ),
 
         Experiment(
@@ -147,7 +147,7 @@ if __name__ == "__main__":
                 UrJob(nodes=8, period=1000),
             ],
             extraparams=['--extramem=1000000'],
-            net_config_variations=net_config_variations,
+            config_variations=config_variations,
         ),
     ]
 
@@ -164,7 +164,7 @@ if __name__ == "__main__":
                 UrJob(nodes=88, period=1200),
             ],
             extraparams=['--extramem=1000000'],
-            net_config_variations=net_config_variations,
+            config_variations=config_variations,
         ),
 
         # Experiment 2: Scaled from 72 → 1050 nodes (preserves 1:2:3 ratio)
@@ -176,7 +176,7 @@ if __name__ == "__main__":
                 MilcJob(nodes=525, iters=120, layout=[3, 5, 5, 7], msg=486 * 1024, compute_delay=0.025),
             ],
             extraparams=['--extramem=1000000'],
-            net_config_variations=net_config_variations,
+            config_variations=config_variations,
         ),
 
         # Experiment 3: Scaled from 72 → 864 nodes (preserves 2:3:1 ratio)
@@ -188,7 +188,7 @@ if __name__ == "__main__":
                 LammpsJob(nodes=64, time_steps=5, replicas=(4, 4, 4)),
             ],
             extraparams=['--extramem=1000000'],
-            net_config_variations=net_config_variations,
+            config_variations=config_variations,
         ),
 
         # Experiment 4: Scaled from 54 → 808 nodes (preserves 75% utilization)
@@ -200,7 +200,7 @@ if __name__ == "__main__":
                 UrJob(nodes=88, period=1200),
             ],
             extraparams=['--extramem=1000000'],
-            net_config_variations=net_config_variations,
+            config_variations=config_variations,
         ),
 
         # Experiment 5: Scaled from 72 → 1056 nodes (preserves extreme imbalance patterns)
@@ -212,7 +212,7 @@ if __name__ == "__main__":
                 UrJob(nodes=444, period=726.609003),
             ],
             extraparams=['--extramem=1000000'],
-            net_config_variations=net_config_variations,
+            config_variations=config_variations,
         ),
 
         # Experiment 6: Scaled from 72 → 1056 nodes (preserves patterns, stays under limit)
@@ -225,7 +225,7 @@ if __name__ == "__main__":
                 UrJob(nodes=128, period=1000),
             ],
             extraparams=['--extramem=1000000'],
-            net_config_variations=net_config_variations,
+            config_variations=config_variations,
         ),
     ]
 
@@ -242,7 +242,7 @@ if __name__ == "__main__":
                 UrJob(nodes=700, period=1200),
             ],
             extraparams=['--extramem=1000000'],
-            net_config_variations=net_config_variations,
+            config_variations=config_variations,
         ),
 
         # Experiment 2: Scaled from 72 → 8400 nodes (preserves 1:2:3 ratio)
@@ -254,7 +254,7 @@ if __name__ == "__main__":
                 MilcJob(nodes=4200, iters=120, layout=[6, 7, 10, 10], msg=486 * 1024, compute_delay=0.025),
             ],
             extraparams=['--extramem=1000000'],
-            net_config_variations=net_config_variations,
+            config_variations=config_variations,
         ),
 
         # Experiment 3: Scaled from 72 → 8400 nodes (preserves 2:3:1 ratio)
@@ -266,7 +266,7 @@ if __name__ == "__main__":
                 LammpsJob(nodes=1400, time_steps=5, replicas=(10, 10, 14)),
             ],
             extraparams=['--extramem=1000000'],
-            net_config_variations=net_config_variations,
+            config_variations=config_variations,
         ),
 
         # Experiment 4: Scaled from 54 → 6300 nodes (preserves 75% utilization)
@@ -278,7 +278,7 @@ if __name__ == "__main__":
                 UrJob(nodes=700, period=1200),
             ],
             extraparams=['--extramem=1000000'],
-            net_config_variations=net_config_variations,
+            config_variations=config_variations,
         ),
 
         # Experiment 5: Scaled from 72 → 8448 nodes (preserves extreme imbalance patterns)
@@ -290,7 +290,7 @@ if __name__ == "__main__":
                 UrJob(nodes=3648, period=726.609003),
             ],
             extraparams=['--extramem=1000000'],
-            net_config_variations=net_config_variations,
+            config_variations=config_variations,
         ),
 
         # Experiment 6: Scaled from 72 → 8448 nodes (preserves patterns, challenges network)
@@ -303,15 +303,15 @@ if __name__ == "__main__":
                 UrJob(nodes=1151, period=1000),
             ],
             extraparams=['--extramem=1000000'],
-            net_config_variations=net_config_variations,
+            config_variations=config_variations,
         ),
     ]
 
     for iter in [1,2,3,4,5,6,7,8,9,10]:
         # The first experiment also runs the simulation in high-fidelity
-        net_config_variations = {}
+        config_variations = {}
         if iter == 1:
-            net_config_variations = {
+            config_variations = {
                 'high-fidelity': {
                     'NETWORK_SURR_ON': '0',
                     'APP_SURR_ON': '0'
@@ -329,7 +329,7 @@ if __name__ == "__main__":
                     UrJob(nodes=88, period=1200),
                 ],
                 extraparams=['--extramem=1000000'],
-                net_config_variations= net_config_variations | {
+                config_variations= config_variations | {
                     'app-and-network-freezing': {
                         'NETWORK_SURR_ON': '1',
                         'APP_SURR_ON': '1',
@@ -349,7 +349,7 @@ if __name__ == "__main__":
                     MilcJob(nodes=4200, iters=120, layout=[6, 7, 10, 10], msg=486 * 1024, compute_delay=0.025),
                 ],
                 extraparams=['--extramem=1000000'],
-                net_config_variations= net_config_variations | {
+                config_variations= config_variations | {
                     'app-surrogate': {
                         'NETWORK_SURR_ON': '0',
                         'APP_SURR_ON': '1',

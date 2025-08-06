@@ -241,14 +241,14 @@ class UrJob(Job):
 class Experiment:
     """Container for an experiment with multiple jobs."""
 
-    def __init__(self, name: str, jobs: list[Job], extraparams: list[str], net_config_variations: dict[str, dict[str, str]]):
+    def __init__(self, name: str, jobs: list[Job], extraparams: list[str], config_variations: dict[str, dict[str, str]] | None = None):
         # Reset all job counters before processing jobs for this experiment
         reset_all_job_counters()
 
         self.name: str = name
         self.jobs: list[Job] = jobs
         self.extraparams: list[str] = extraparams
-        self.net_config_variations: dict[str, dict[str, str]] = net_config_variations
+        self.config_variations: dict[str, dict[str, str]] | None = config_variations
 
     def get_total_nodes(self) -> int:
         """Get the total number of nodes needed for all jobs."""

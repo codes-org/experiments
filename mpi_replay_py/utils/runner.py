@@ -255,7 +255,30 @@ class TestRunner:
             print(f"    SUCCESS: Variation {variation_name} completed successfully")
             return True
 
+    def run_single_experiment(self, experiment: Experiment, template_vars: dict[str, str]) -> None:
+        assert experiment.config_variations is None
+
+        exp_config_dir = self.config_generator.generate_base_config(experiment, template_vars)
+        exp_name = experiment.name
+
+        print(f"Running single experiment for: {exp_name}")
+
+        # Check if we've been interrupted
+        success = False
+        if self.interrupted:
+            print("Experiment interrupted by user")
+        else:
+            success = self.run_simulation(exp_config_dir, "exec_output", experiment.extraparams, template_vars)
+
+        if success:
+            print("Successfully completed experiment")
+        else:
+            print("Failed to complete experiment")
+        print("----------------------------------------")
+
     def run_experiment_with_config_variations(self, experiment: Experiment, template_vars: dict[str, str]) -> None:
+        assert experiment.config_variations is not None
+
         exp_config_dir = self.config_generator.generate_base_config(experiment, template_vars)
         exp_name = experiment.name
 
@@ -264,7 +287,7 @@ class TestRunner:
         failed_variations: list[str] = []
         successful_variations: list[str] = []
 
-        for variation_name, overridding_vars in experiment.net_config_variations.items():
+        for variation_name, overridding_vars in experiment.config_variations.items():
             # Check if we've been interrupted
             if self.interrupted:
                 print("Experiment interrupted by user")
@@ -296,7 +319,10 @@ class TestRunner:
                 print("Test suite interrupted by user")
                 break
 
-            self.run_experiment_with_config_variations(experiment, self.template_vars)
+            if experiment.config_variations is None:
+                self.run_single_experiment(experiment, self.template_vars)
+            else:
+                self.run_experiment_with_config_variations(experiment, self.template_vars)
 
         print("============================================")
         print("TEST SUITE COMPLETED")
